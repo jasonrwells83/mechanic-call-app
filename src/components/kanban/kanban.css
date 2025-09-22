@@ -1,0 +1,259 @@
+/* Kanban Board Animations and Styles */
+
+/* Drag and drop animations */
+.kanban-card-dragging {
+  transform: rotate(5deg) scale(1.02);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  opacity: 0.9;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kanban-column-drag-over {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 2px dashed rgba(59, 130, 246, 0.5);
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Status transition animations */
+@keyframes status-change-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.kanban-card-status-change {
+  animation: status-change-pulse 0.8s ease-out;
+}
+
+/* Column capacity warnings */
+@keyframes capacity-warning {
+  0%, 100% {
+    border-color: rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    border-color: rgba(249, 115, 22, 0.8);
+  }
+}
+
+.kanban-column-at-capacity {
+  animation: capacity-warning 2s ease-in-out infinite;
+}
+
+/* Priority indicators */
+.job-card-high-priority {
+  position: relative;
+  overflow: hidden;
+}
+
+.job-card-high-priority::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ef4444, #dc2626, #ef4444);
+  background-size: 200% 100%;
+  animation: priority-gradient 2s ease-in-out infinite;
+}
+
+@keyframes priority-gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Status indicators with pulsing */
+.status-indicator-active {
+  position: relative;
+}
+
+.status-indicator-active::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #16a34a;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator-waiting::after {
+  background-color: #ea580c;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(-50%) scale(1.2);
+  }
+}
+
+/* Smooth card transitions */
+.kanban-card {
+  transition: all 0.2s ease;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Column statistics animations */
+.column-stats {
+  transition: all 0.3s ease;
+}
+
+.column-stats-updated {
+  transform: scale(1.1);
+  color: #16a34a;
+}
+
+/* Loading states */
+.kanban-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.kanban-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: loading-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Empty state animations */
+.kanban-empty-state {
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.kanban-empty-state:hover {
+  opacity: 1;
+}
+
+/* Workflow progress indicator */
+.workflow-progress {
+  position: relative;
+  height: 4px;
+  background-color: #f1f5f9;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.workflow-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #16a34a);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.workflow-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: progress-shimmer 2s ease-in-out infinite;
+}
+
+@keyframes progress-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .kanban-columns {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .kanban-card {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .kanban-columns {
+    grid-template-columns: 1fr;
+  }
+  
+  .kanban-column {
+    max-height: 400px;
+  }
+}
+
+/* Accessibility improvements */
+.kanban-card:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.kanban-column[data-drag-over="true"] {
+  background-color: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .kanban-card-dragging {
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+  }
+  
+  .workflow-progress {
+    background-color: #334155;
+  }
+}
