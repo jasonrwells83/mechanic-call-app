@@ -704,7 +704,11 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
       })
       .filter((event): event is CalendarEventSnapshot => event !== null);
   }, [getCalendarApi]);
-\r\n      if (!api) {
+
+  const printSchedule = useCallback(
+    (options: { viewName?: string; date?: Date } = {}) => {
+      const api = getCalendarApi();
+      if (!api) {
         return;
       }
 
