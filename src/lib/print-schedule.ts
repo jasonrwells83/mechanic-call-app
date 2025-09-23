@@ -1,7 +1,16 @@
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  addDays,
+  format,
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+} from 'date-fns';
 import type { CalendarEventSnapshot } from '@/components/calendar/SchedulingCalendar';
 
-type PrintScope = 'day' | 'week' | 'month';
+export type PrintScope = 'day' | 'week' | 'month';
 
 interface PrintOptions {
   scope: PrintScope;
@@ -21,11 +30,74 @@ const SCOPE_TITLES: Record<PrintScope, string> = {
   month: 'Monthly Schedule',
 };
 
+type ColumnDefinition = {
+  header: string;
+  align?: 'left' | 'right';
+  value: (event: CalendarEventSnapshot) => string;
+};
+
+interface DayGroup {
+  date: Date;
+  events: CalendarEventSnapshot[];
+}
+
+const SCOPE_COLUMNS: Record<PrintScope, ColumnDefinition[]> = {
+  day: [
+    { header: 'Start', value: (event) => format(event.start, 'p') },
+    { header: 'End', value: (event) => format(event.end, 'p') },
+    { header: 'Bay', value: (event) => formatBayLabel(resolveBay(event)) },
+    { header: 'Job', value: (event) => event.title },
+    { header: 'Customer', value: (event) => getStringProp(event, 'customerName') },
+    { header: 'Vehicle', value: (event) => getStringProp(event, 'vehicleInfo') },
+    { header: 'Status', value: (event) => getStringProp(event, 'status') },
+    { header: 'Priority', value: (event) => getStringProp(event, 'priority') },
+    {
+      header: 'Est. Hours',
+      align: 'right',
+      value: (event) => getNumberProp(event, 'estimatedHours'),
+    },
+  ],
+  week: [
+    { header: 'Start', value: (event) => format(event.start, 'p') },
+    { header: 'End', value: (event) => format(event.end, 'p') },
+    { header: 'Bay', value: (event) => formatBayLabel(resolveBay(event)) },
+    { header: 'Job', value: (event) => event.title },
+    { header: 'Vehicle', value: (event) => getStringProp(event, 'vehicleInfo') },
+    { header: 'Customer', value: (event) => getStringProp(event, 'customerName') },
+  ],
+  month: [
+    { header: 'Job Type', value: (event) => event.title },
+    { header: 'Vehicle', value: (event) => getStringProp(event, 'vehicleInfo') },
+  ],
+};
+
 function formatBayLabel(id: string | null | undefined): string {
   if (!id) {
     return 'Unassigned';
   }
   return BAY_LABELS[id] ?? id;
+}
+
+function resolveBay(event: CalendarEventSnapshot): string | null {
+  const extendedBay = (event.extendedProps as { bay?: string }).bay ?? null;
+  return event.resourceId ?? extendedBay ?? null;
+}
+
+function getStringProp(event: CalendarEventSnapshot, key: string): string {
+  const value = (event.extendedProps as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function getNumberProp(event: CalendarEventSnapshot, key: string): string {
+  const value = (event.extendedProps as Record<string, unknown>)[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toFixed(1);
+  }
+  if (typeof value === 'string' && value.trim().length > 0 && !Number.isNaN(Number(value))) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed.toFixed(1) : '';
+  }
+  return '';
 }
 
 function getRangeForScope(scope: PrintScope, reference: Date): { start: Date; end: Date } {
@@ -52,66 +124,117 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function formatEventRow(event: CalendarEventSnapshot): string {
-  const customer = typeof event.extendedProps.customerName === 'string'
-    ? event.extendedProps.customerName
-    : '';
-  const vehicle = typeof event.extendedProps.vehicleInfo === 'string'
-    ? event.extendedProps.vehicleInfo
-    : '';
-  const status = typeof event.extendedProps.status === 'string'
-    ? event.extendedProps.status
-    : '';
-  const priority = typeof event.extendedProps.priority === 'string'
-    ? event.extendedProps.priority
-    : '';
-  const estimatedHours = typeof event.extendedProps.estimatedHours === 'number'
-    ? event.extendedProps.estimatedHours.toFixed(1)
-    : '';
+function renderTableHead(columns: ColumnDefinition[]): string {
+  const cells = columns
+    .map((column) => {
+      const classNames = column.align === 'right' ? ' class="text-right"' : '';
+      return `<th${classNames}>${escapeHtml(column.header)}</th>`;
+    })
+    .join('');
 
-  return `
-        <tr>
-          <td>${escapeHtml(format(event.start, 'p'))}</td>
-          <td>${escapeHtml(format(event.end, 'p'))}</td>
-          <td>${escapeHtml(formatBayLabel(event.resourceId ?? (event.extendedProps as { bay?: string }).bay ?? undefined))}</td>
-          <td>${escapeHtml(event.title)}</td>
-          <td>${escapeHtml(customer)}</td>
-          <td>${escapeHtml(vehicle)}</td>
-          <td>${escapeHtml(status)}</td>
-          <td>${escapeHtml(priority)}</td>
-          <td class="text-right">${escapeHtml(estimatedHours)}</td>
-        </tr>`;
+  return `<thead><tr>${cells}</tr></thead>`;
 }
 
-function buildDaySection(date: Date, events: CalendarEventSnapshot[], index: number): string {
+function formatEventRow(event: CalendarEventSnapshot, columns: ColumnDefinition[]): string {
+  const cells = columns
+    .map((column) => {
+      const rawValue = column.value(event);
+      const value = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+      const classNames = column.align === 'right' ? ' class="text-right"' : '';
+      return `<td${classNames}>${escapeHtml(value)}</td>`;
+    })
+    .join('');
+
+  return `<tr>${cells}</tr>`;
+}
+
+function buildDaySection(scope: PrintScope, date: Date, events: CalendarEventSnapshot[], index: number): string {
   const header = format(date, 'EEEE, MMMM d, yyyy');
+  const columns = SCOPE_COLUMNS[scope];
   const rows = events.length
     ? events
         .slice()
         .sort((a, b) => a.start.getTime() - b.start.getTime())
-        .map(formatEventRow)
+        .map((event) => formatEventRow(event, columns))
         .join('\n')
-    : '<tr><td colspan="9" class="empty-cell">No appointments scheduled.</td></tr>';
+    : `<tr><td colspan="${columns.length}" class="empty-cell">No appointments scheduled.</td></tr>`;
 
+  const tableHead = renderTableHead(columns);
   const sectionClass = index === 0 ? 'day-section' : 'day-section page-break';
 
   return `
       <section class="${sectionClass}">
         <h2>${escapeHtml(header)}</h2>
         <table>
-          <thead>
-            <tr>
-              <th>Start</th>
-              <th>End</th>
-              <th>Bay</th>
-              <th>Job</th>
-              <th>Customer</th>
-              <th>Vehicle</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th class="text-right">Est. Hours</th>
-            </tr>
-          </thead>
+          ${tableHead}
+          <tbody>
+${rows}
+          </tbody>
+        </table>
+      </section>`;
+}
+
+function buildWeekSection(days: DayGroup[]): string {
+  const columns = SCOPE_COLUMNS.week;
+  const tableHead = renderTableHead(columns);
+
+  const rows = days
+    .map((day) => {
+      const dayLabel = `<tr class="subheader-row"><td colspan="${columns.length}">${escapeHtml(
+        format(day.date, 'EEEE, MMM d')
+      )}</td></tr>`;
+      if (day.events.length === 0) {
+        return `${dayLabel}<tr><td colspan="${columns.length}" class="empty-cell">No appointments scheduled.</td></tr>`;
+      }
+
+      const eventRows = day.events
+        .slice()
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+        .map((event) => formatEventRow(event, columns))
+        .join('\n');
+      return `${dayLabel}\n${eventRows}`;
+    })
+    .join('\n');
+
+  return `
+      <section class="aggregated-section">
+        <h2>Week Overview</h2>
+        <table>
+          ${tableHead}
+          <tbody>
+${rows}
+          </tbody>
+        </table>
+      </section>`;
+}
+
+function buildMonthSection(days: DayGroup[]): string {
+  const columns = SCOPE_COLUMNS.month;
+  const tableHead = renderTableHead(columns);
+
+  const rows = days
+    .map((day) => {
+      const dayLabel = `<tr class="subheader-row"><td colspan="${columns.length}">${escapeHtml(
+        format(day.date, 'EEEE, MMM d')
+      )}</td></tr>`;
+      if (day.events.length === 0) {
+        return `${dayLabel}<tr><td colspan="${columns.length}" class="empty-cell">No appointments scheduled.</td></tr>`;
+      }
+
+      const eventRows = day.events
+        .slice()
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+        .map((event) => formatEventRow(event, columns))
+        .join('\n');
+      return `${dayLabel}\n${eventRows}`;
+    })
+    .join('\n');
+
+  return `
+      <section class="aggregated-section month-section">
+        <h2>Month Overview</h2>
+        <table>
+          ${tableHead}
           <tbody>
 ${rows}
           </tbody>
@@ -129,7 +252,7 @@ function buildSummary(events: CalendarEventSnapshot[]): { appointments: number; 
   events.forEach((event) => {
     const duration = (event.end.getTime() - event.start.getTime()) / 36e5;
     totals.hours += duration;
-    const bay = formatBayLabel(event.resourceId ?? (event.extendedProps as { bay?: string }).bay ?? undefined);
+    const bay = formatBayLabel(resolveBay(event) ?? undefined);
     const bucket = byBay.get(bay) ?? { appointments: 0, hours: 0 };
     bucket.appointments += 1;
     bucket.hours += duration;
@@ -165,19 +288,23 @@ export function openPrintableSchedule({ scope, anchorDate, events, title }: Prin
 
   const dayMap = new Map<string, { date: Date; events: CalendarEventSnapshot[] }>();
   filtered.forEach((event) => {
-    const dayKey = startOfDay(event.start).toISOString();
+    const normalizedDate = startOfDay(event.start);
+    const dayKey = format(normalizedDate, 'yyyy-MM-dd');
     if (!dayMap.has(dayKey)) {
-      dayMap.set(dayKey, { date: startOfDay(event.start), events: [] });
+      dayMap.set(dayKey, { date: new Date(normalizedDate), events: [] });
     }
     dayMap.get(dayKey)!.events.push(event);
   });
 
   // Ensure every day in the range appears, even if empty.
-  for (let current = startOfDay(start); current <= end; current.setDate(current.getDate() + 1)) {
-    const key = current.toISOString();
+  let cursor = startOfDay(start);
+  const endOfRange = startOfDay(end);
+  while (cursor <= endOfRange) {
+    const key = format(cursor, 'yyyy-MM-dd');
     if (!dayMap.has(key)) {
-      dayMap.set(key, { date: new Date(current), events: [] });
+      dayMap.set(key, { date: new Date(cursor), events: [] });
     }
+    cursor = addDays(cursor, 1);
   }
 
   const days = Array.from(dayMap.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -192,7 +319,12 @@ export function openPrintableSchedule({ scope, anchorDate, events, title }: Prin
   const generatedAt = format(new Date(), 'PPpp');
   const docTitle = title ?? 'Mechanic Shop OS';
 
-  const daySections = days.map((day, index) => buildDaySection(day.date, day.events, index)).join('\n');
+  const daySections =
+    scope === 'day'
+      ? days.map((day, index) => buildDaySection(scope, day.date, day.events, index)).join('\n')
+      : scope === 'week'
+      ? buildWeekSection(days)
+      : buildMonthSection(days);
   const baySummary = summary.byBay
     .map((entry) => `
             <div class="summary-card">
@@ -217,11 +349,15 @@ export function openPrintableSchedule({ scope, anchorDate, events, title }: Prin
     .summary-subvalue { font-size: 12px; color: #6b7280; }
     .day-section { margin-bottom: 32px; }
     .day-section h2 { font-size: 20px; font-weight: 600; margin: 0 0 12px; }
-    table { width: 100%; border-collapse: collapse; }
+    .aggregated-section { margin-bottom: 32px; }
+    .aggregated-section h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #374151; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #111827; background: #f3f4f6; padding: 8px; border: 1px solid #e5e7eb; }
     td { font-size: 12px; color: #1f2937; padding: 8px; border: 1px solid #e5e7eb; vertical-align: top; }
     td.text-right, th.text-right { text-align: right; }
     .empty-cell { text-align: center; color: #6b7280; font-style: italic; }
+    .subheader-row td { background: #e5e7eb; color: #1f2937; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; }
+    .month-section table { page-break-inside: avoid; }
     .page-break { page-break-before: always; }
     @page { size: letter portrait; margin: 0.5in; }
     @media print {
