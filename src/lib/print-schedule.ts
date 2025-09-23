@@ -280,10 +280,17 @@ export function openPrintableSchedule({ scope, anchorDate, events, title }: Prin
     .filter((event) => event.start < end && event.end > start)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+  const printWindow = window.open('', '_blank', 'noopener=yes');
   if (!printWindow) {
     console.error('Unable to open print window. Please allow pop-ups for this site.');
     return;
+  }
+
+  try {
+    // Ensure no reference back to the opener for security purposes.
+    printWindow.opener = null;
+  } catch (error) {
+    // Some browsers may prevent setting the opener; ignore silently.
   }
 
   const dayMap = new Map<string, { date: Date; events: CalendarEventSnapshot[] }>();
@@ -402,9 +409,20 @@ export function openPrintableSchedule({ scope, anchorDate, events, title }: Prin
     </body>
   </html>`;
 
+  const triggerPrint = () => {
+    printWindow.focus();
+    printWindow.print();
+  };
+
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+
+  if (printWindow.document.readyState === 'complete') {
+    triggerPrint();
+  } else {
+    printWindow.document.addEventListener('DOMContentLoaded', () => {
+      triggerPrint();
+    });
+  }
 }
