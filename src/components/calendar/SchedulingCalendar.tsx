@@ -16,6 +16,7 @@ import type {
   DatesSetArg,
 } from '@fullcalendar/core';
 import { defaultCalendarConfig, checkBayAvailability, createCalendarEvent } from '@/lib/calendar-config';
+import { openPrintableSchedule, type PrintScope } from '@/lib/print-schedule';
 import { ApiError, appointmentApi, customerApi, jobApi, vehicleApi } from '@/lib/api-client';
 import { useRealtimeAppointmentsByDateRange, useRealtimeAppointmentNotifications } from '@/hooks';
 import { useUIStore, usePreferencesStore } from '@/stores';
@@ -54,7 +55,7 @@ export interface SchedulingCalendarHandle {
   getCurrentView: () => string;
   getCurrentDate: () => Date;
   getEvents: () => CalendarEventSnapshot[];
-  printSchedule: (options?: { viewName?: string; date?: Date }) => void;
+  printSchedule: (options?: { viewName?: string; date?: Date; scope?: PrintScope; title?: string }) => void;
 }
 
 type MutableEventApi = EventApi & {
@@ -81,6 +82,32 @@ interface ConflictModalState {
     requestedBay: Bay;
   } | null;
   pendingReceiveInfo?: EventReceiveArg;
+}
+
+const VIEW_SCOPE_MAP: Record<string, PrintScope> = {
+  resourceTimeGridDay: 'day',
+  timeGridDay: 'day',
+  dayGridDay: 'day',
+  resourceTimeGridWeek: 'week',
+  timeGridWeek: 'week',
+  dayGridWeek: 'week',
+  dayGridMonth: 'month',
+  timeGridMonth: 'month',
+};
+
+function inferScopeFromView(viewName: string): PrintScope {
+  if (VIEW_SCOPE_MAP[viewName]) {
+    return VIEW_SCOPE_MAP[viewName];
+  }
+
+  const normalized = viewName.toLowerCase();
+  if (normalized.includes('month')) {
+    return 'month';
+  }
+  if (normalized.includes('week')) {
+    return 'week';
+  }
+  return 'day';
 }
 
 export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, SchedulingCalendarProps>(function SchedulingCalendar(
@@ -706,61 +733,29 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
   }, [getCalendarApi]);
 
   const printSchedule = useCallback(
-    (options: { viewName?: string; date?: Date } = {}) => {
+    (options: { viewName?: string; date?: Date; scope?: PrintScope; title?: string } = {}) => {
       const api = getCalendarApi();
       if (!api) {
         return;
       }
 
-      const previousView = api.view.type;
-      const previousDate = api.getDate();
-      const targetView = options.viewName ?? previousView;
-      const targetDate = options.date ?? previousDate;
+      const anchorDate = options.date ?? api.getDate();
+      const viewName = options.viewName ?? api.view.type;
+      const scope = options.scope ?? inferScopeFromView(viewName);
+      const events = getEventSnapshots();
+      const defaultTitle =
+        typeof document !== 'undefined' && typeof document.title === 'string' && document.title.trim().length > 0
+          ? document.title
+          : 'Mechanic Shop OS';
 
-      const needsViewChange = targetView !== previousView;
-      const needsDateChange = targetDate.toDateString() !== previousDate.toDateString();
-
-      let cleaned = false;
-
-      function cleanup() {
-        if (cleaned) {
-          return;
-        }
-        cleaned = true;
-
-        if (needsDateChange) {
-          api.gotoDate(previousDate);
-        }
-        if (needsViewChange) {
-          api.changeView(previousView);
-        }
-
-        window.removeEventListener('afterprint', handleAfterPrint);
-      }
-
-      function handleAfterPrint() {
-        cleanup();
-      }
-
-      if (needsViewChange) {
-        api.changeView(targetView);
-      }
-      if (needsDateChange) {
-        api.gotoDate(targetDate);
-      }
-
-      window.addEventListener('afterprint', handleAfterPrint, { once: true });
-
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          window.print();
-          setTimeout(() => {
-            cleanup();
-          }, 600);
-        }, 80);
+      openPrintableSchedule({
+        scope,
+        anchorDate,
+        events,
+        title: options.title ?? defaultTitle,
       });
     },
-    [getCalendarApi]
+    [getCalendarApi, getEventSnapshots]
   );
 
   useImperativeHandle(
