@@ -16,6 +16,7 @@ import type {
   DatesSetArg,
 } from '@fullcalendar/core';
 import { defaultCalendarConfig, checkBayAvailability, createCalendarEvent } from '@/lib/calendar-config';
+import { openPrintableSchedule, type PrintScope } from '@/lib/print-schedule';
 import { ApiError, appointmentApi, customerApi, jobApi, vehicleApi } from '@/lib/api-client';
 import { useRealtimeAppointmentsByDateRange, useRealtimeAppointmentNotifications } from '@/hooks';
 import { useUIStore, usePreferencesStore } from '@/stores';
@@ -54,7 +55,7 @@ export interface SchedulingCalendarHandle {
   getCurrentView: () => string;
   getCurrentDate: () => Date;
   getEvents: () => CalendarEventSnapshot[];
-  printSchedule: (options?: { viewName?: string; date?: Date }) => void;
+  printSchedule: (options?: { scope?: PrintScope; anchorDate?: Date }) => void;
 }
 
 type MutableEventApi = EventApi & {
@@ -704,60 +705,25 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
       })
       .filter((event): event is CalendarEventSnapshot => event !== null);
   }, [getCalendarApi]);
-\r\n      if (!api) {
-        return;
-      }
 
-      const previousView = api.view.type;
-      const previousDate = api.getDate();
-      const targetView = options.viewName ?? previousView;
-      const targetDate = options.date ?? previousDate;
+  const printSchedule = useCallback((options: { scope?: PrintScope; anchorDate?: Date } = {}) => {
+    const events = getEventSnapshots();
+    const inferredScope: PrintScope =
+      options.scope ??
+      (currentView === 'resourceTimeGridDay'
+        ? 'day'
+        : currentView === 'resourceTimeGridWeek'
+        ? 'week'
+        : 'month');
+    const anchorDate = options.anchorDate ? new Date(options.anchorDate) : new Date(currentDate);
 
-      const needsViewChange = targetView !== previousView;
-      const needsDateChange = targetDate.toDateString() !== previousDate.toDateString();
-
-      let cleaned = false;
-
-      function cleanup() {
-        if (cleaned) {
-          return;
-        }
-        cleaned = true;
-
-        if (needsDateChange) {
-          api.gotoDate(previousDate);
-        }
-        if (needsViewChange) {
-          api.changeView(previousView);
-        }
-
-        window.removeEventListener('afterprint', handleAfterPrint);
-      }
-
-      function handleAfterPrint() {
-        cleanup();
-      }
-
-      if (needsViewChange) {
-        api.changeView(targetView);
-      }
-      if (needsDateChange) {
-        api.gotoDate(targetDate);
-      }
-
-      window.addEventListener('afterprint', handleAfterPrint, { once: true });
-
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          window.print();
-          setTimeout(() => {
-            cleanup();
-          }, 600);
-        }, 80);
-      });
-    },
-    [getCalendarApi]
-  );
+    openPrintableSchedule({
+      scope: inferredScope,
+      anchorDate,
+      events,
+      title: 'Mechanic Call App',
+    });
+  }, [getEventSnapshots, currentView, currentDate]);
 
   useImperativeHandle(
     ref,
@@ -993,6 +959,9 @@ export function CalendarLegend() {
 
 // Export calendar utilities for external use
 export type { SchedulingCalendarProps, SchedulingCalendarHandle, CalendarEventSnapshot };
+
+
+
 
 
 

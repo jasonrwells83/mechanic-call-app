@@ -457,6 +457,7 @@ export function createCalendarEvent(
       estimatedHours: job?.estHours,
       customerName: customer?.name,
       vehicleInfo: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : undefined,
+      vehicleModel: vehicle?.model,
       appointmentId: appointment.id,
       invoiceNumber: job?.invoiceNumber,
     },
@@ -516,3 +517,5 @@ export function generateTimeSlots(
 
   return slots;
 }
+
+

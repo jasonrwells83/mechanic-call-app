@@ -34,12 +34,6 @@ interface ScheduleReportSummary {
   events: CalendarEventSnapshot[];
 }
 
-const scheduleViewMap: Record<ReportScope, string> = {
-  day: 'resourceTimeGridDay',
-  week: 'resourceTimeGridWeek',
-  month: 'dayGridMonth',
-};
-
 const scopeLabels: Record<ReportScope, string> = {
   day: 'Day',
   week: 'Week',
@@ -241,8 +235,8 @@ export function CalendarPage() {
       return;
     }
 
-    const viewName = scheduleViewMap[scope];
-    calendar.printSchedule({ viewName });
+    calendar.printSchedule({ scope });
+
   };
 
 
@@ -571,6 +565,7 @@ export function CalendarPage() {
     </div>
   );
 }
+
 
 
 
