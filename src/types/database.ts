@@ -40,6 +40,34 @@ export interface Job {
   updatedAt: string;
 }
 
+export interface JobMilestone {
+  id: string;
+  title: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  description?: string;
+  completedAt?: string;
+  dueAt?: string;
+  assignedTo?: string;
+}
+
+export interface JobNote {
+  id: string;
+  author: string;
+  content: string;
+  createdAt: string;
+  type?: 'general' | 'technical' | 'customer' | 'internal';
+  isImportant?: boolean;
+}
+
+export interface JobAttachment {
+  id: string;
+  label: string;
+  type: 'document' | 'link';
+  url: string;
+  uploadedAt: string;
+  uploadedBy?: string;
+}
+
 export interface Appointment {
   id: string;
   jobId: string;
@@ -116,6 +144,12 @@ export interface JobWithRelations extends Job {
   customer?: Customer;
   vehicle?: Vehicle;
   appointment?: Appointment;
+  jobNumber?: string;
+  description?: string;
+  estimatedDurationMinutes?: number;
+  milestones?: JobMilestone[];
+  noteEntries?: JobNote[];
+  attachments?: JobAttachment[];
 }
 
 export interface CustomerWithVehicles extends Customer {
@@ -128,6 +162,8 @@ export interface VehicleWithHistory extends Vehicle {
   customer?: Customer;
   jobs?: Job[];
   serviceHistory?: ServiceHistoryEntry[];
+  notes?: VehicleNote[];
+  alerts?: VehicleAlert[];
 }
 
 export interface ServiceHistoryEntry {
@@ -139,6 +175,28 @@ export interface ServiceHistoryEntry {
   description: string;
   mileage?: number;
   cost?: number;
+  technician?: string;
+  notes?: string;
+}
+
+export interface VehicleNote {
+  id: string;
+  content: string;
+  author?: string;
+  createdAt: string;
+}
+
+export interface VehicleAlert {
+  id: string;
+  title: string;
+  description?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  detectedAt: string;
+}
+
+export interface AppointmentWithJob extends Appointment {
+  job?: JobWithRelations;
+  customer?: Customer;
 }
 
 // API Response types

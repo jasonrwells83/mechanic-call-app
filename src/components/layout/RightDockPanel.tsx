@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import {
   ChevronRight,
@@ -10,30 +9,42 @@ import {
   X,
   Maximize2,
   Minimize2,
-  Settings,
-  Pin,
-  PinOff,
   User,
   Car,
   Calendar,
   FileText,
-  Clock,
   Phone,
   Mail,
   MessageSquare,
-  Star,
-  Activity,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  MapPin,
   Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores';
 import { useSelectionStore } from '@/stores/selection-store';
+import type { DockPayload, SelectionItem, SelectionType } from '@/stores/selection-store';
 import { JobDetailsView } from '@/components/dock/JobDetailsView';
 import { VehicleDetailsView } from '@/components/dock/VehicleDetailsView';
+import { CustomerDetailsView } from '@/components/dock/CustomerDetailsView';
+import { CallDetailsView } from '@/components/dock/CallDetailsView';
+import { AppointmentDetailsView } from '@/components/dock/AppointmentDetailsView';
+import {
+  useJob,
+  useVehicle,
+  useCustomer,
+  useCall,
+  useAppointment,
+  usePrefetchJob,
+  usePrefetchVehicle,
+  usePrefetchCustomer,
+  usePrefetchCall,
+  usePrefetchAppointment,
+} from '@/hooks';
+import type {
+  AppointmentWithJob,
+  Call,
+  CustomerWithVehicles,
+  JobWithRelations,
+  VehicleWithHistory,
+} from '@/types';
 
 export type DockPanelContext = 
   | 'job-details'
@@ -41,15 +52,29 @@ export type DockPanelContext =
   | 'vehicle-details'
   | 'call-details'
   | 'appointment-details'
+  | 'menu'
   | 'empty';
 
-export interface DockPanelState {
-  isOpen: boolean;
+interface PanelLayoutState {
   width: number;
-  context: DockPanelContext;
-  contextData: any;
   isPinned: boolean;
   isMaximized: boolean;
+}
+
+interface ContextViewState<T> {
+  data: T | null;
+  isLoading: boolean;
+  error: string | null;
+  onRetry?: () => Promise<unknown>;
+  onRefresh?: () => Promise<unknown>;
+}
+
+interface DockContextData {
+  job: ContextViewState<JobWithRelations>;
+  customer: ContextViewState<CustomerWithVehicles>;
+  vehicle: ContextViewState<VehicleWithHistory>;
+  call: ContextViewState<Call>;
+  appointment: ContextViewState<AppointmentWithJob>;
 }
 
 export interface RightDockPanelProps {
@@ -100,104 +125,208 @@ const CONTEXT_CONFIGS = {
     color: 'text-gray-600',
     bgColor: 'bg-gray-100',
   },
+  'menu': {
+    title: 'Context Panel',
+    icon: FileText,
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-100',
+  },
 };
 
 export function RightDockPanel({ className = '' }: RightDockPanelProps) {
-  const [panelState, setPanelState] = useState<DockPanelState>({
-    isOpen: false,
+  const [panelLayout, setPanelLayout] = useState<PanelLayoutState>({
     width: PANEL_WIDTHS.normal,
-    context: 'empty',
-    contextData: null,
     isPinned: false,
     isMaximized: false,
   });
 
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStartX, setResizeStartX] = useState(0);
-  const [resizeStartWidth, setResizeStartWidth] = useState(0);
+  const [resizeStartWidth, setResizeStartWidth] = useState(PANEL_WIDTHS.normal);
 
-  const { addToast } = useUIStore();
-  
-  // Selection store integration
-  const {
-    dockContext,
-    dockData,
-    isDockOpen,
-    currentSelection,
-    setDockContext,
-    toggleDock,
-    openDock,
-    closeDock,
-  } = useSelectionStore();
+  const isDockOpen = useSelectionStore((state) => state.isDockOpen);
+  const dockContext = useSelectionStore((state) => state.dockContext);
+  const dockData = useSelectionStore((state) => state.dockData);
+  const dockView = useSelectionStore((state) => state.dockView);
+  const dockPayload = useSelectionStore((state) => state.dockPayload);
+  const toggleDock = useSelectionStore((state) => state.toggleDock);
+  const closeDock = useSelectionStore((state) => state.closeDock);
+  const setDockContext = useSelectionStore((state) => state.setDockContext);
+  const showMenu = useSelectionStore((state) => state.showMenu);
+  const recentItems = useSelectionStore((state) => state.recentItems);
+  const selectItem = useSelectionStore((state) => state.selectItem);
 
-  // Sync panel state with selection store
-  useEffect(() => {
-    setPanelState(prev => ({
-      ...prev,
-      isOpen: isDockOpen,
-      context: dockContext,
-      contextData: dockData,
-    }));
-  }, [dockContext, dockData, isDockOpen]);
+  const prefetchJob = usePrefetchJob();
+  const prefetchCustomer = usePrefetchCustomer();
+  const prefetchVehicle = usePrefetchVehicle();
+  const prefetchCall = usePrefetchCall();
+  const prefetchAppointment = usePrefetchAppointment();
 
-  // Handle panel toggle
+  const handleRecentHover = useCallback(
+    (item: SelectionItem) => {
+      if (!item?.id) {
+        return;
+      }
+      switch (item.type) {
+        case 'job':
+          prefetchJob(item.id);
+          break;
+        case 'customer':
+          prefetchCustomer(item.id);
+          break;
+        case 'vehicle':
+          prefetchVehicle(item.id);
+          break;
+        case 'call':
+          prefetchCall(item.id);
+          break;
+        case 'appointment':
+          prefetchAppointment(item.id);
+          break;
+        default:
+          break;
+      }
+    },
+    [prefetchJob, prefetchCustomer, prefetchVehicle, prefetchCall, prefetchAppointment]
+  );
+
+  const getFallbackData = useCallback(
+    <T,>(type: SelectionType, contextKey: DockPanelContext): T | null => {
+      if (dockPayload?.entityType === type) {
+        return ((dockPayload.initialData ?? dockData) as T | null) ?? null;
+      }
+      if (!dockPayload && dockContext === contextKey && dockData) {
+        return (dockData as T | null) ?? null;
+      }
+      return null;
+    },
+    [dockPayload, dockContext, dockData]
+  );
+
+  const entityId = dockPayload?.entityId ?? '';
+  const isContextView = dockView === 'context';
+
+  const jobEnabled = isContextView && dockContext === 'job-details' && dockPayload?.entityType === 'job' && !!entityId;
+  const customerEnabled =
+    isContextView && dockContext === 'customer-details' && dockPayload?.entityType === 'customer' && !!entityId;
+  const vehicleEnabled =
+    isContextView && dockContext === 'vehicle-details' && dockPayload?.entityType === 'vehicle' && !!entityId;
+  const callEnabled = isContextView && dockContext === 'call-details' && dockPayload?.entityType === 'call' && !!entityId;
+  const appointmentEnabled =
+    isContextView && dockContext === 'appointment-details' && dockPayload?.entityType === 'appointment' && !!entityId;
+
+  const jobQuery = useJob(entityId, jobEnabled);
+  const customerQuery = useCustomer(entityId, customerEnabled);
+  const vehicleQuery = useVehicle(entityId, vehicleEnabled);
+  const callQuery = useCall(entityId, callEnabled);
+  const appointmentQuery = useAppointment(entityId, appointmentEnabled);
+
+  const jobFallback = getFallbackData<JobWithRelations>('job', 'job-details');
+  const customerFallback = getFallbackData<CustomerWithVehicles>('customer', 'customer-details');
+  const vehicleFallback = getFallbackData<VehicleWithHistory>('vehicle', 'vehicle-details');
+  const callFallback = getFallbackData<Call>('call', 'call-details');
+  const appointmentFallback = getFallbackData<AppointmentWithJob>('appointment', 'appointment-details');
+
+  const jobData = jobEnabled
+    ? (jobQuery.data?.data as JobWithRelations | undefined) ?? jobFallback
+    : jobFallback;
+  const customerData = customerEnabled
+    ? (customerQuery.data?.data as CustomerWithVehicles | undefined) ?? customerFallback
+    : customerFallback;
+  const vehicleData = vehicleEnabled
+    ? (vehicleQuery.data?.data as VehicleWithHistory | undefined) ?? vehicleFallback
+    : vehicleFallback;
+  const callData = callEnabled ? (callQuery.data?.data as Call | undefined) ?? callFallback : callFallback;
+  const appointmentData = appointmentEnabled
+    ? (appointmentQuery.data?.data as AppointmentWithJob | undefined) ?? appointmentFallback
+    : appointmentFallback;
+
+  const jobErrorMessage = getQueryErrorMessage(jobQuery.data?.error, jobQuery.error);
+  const customerErrorMessage = getQueryErrorMessage(customerQuery.data?.error, customerQuery.error);
+  const vehicleErrorMessage = getQueryErrorMessage(vehicleQuery.data?.error, vehicleQuery.error);
+  const callErrorMessage = getQueryErrorMessage(callQuery.data?.error, callQuery.error);
+  const appointmentErrorMessage = getQueryErrorMessage(appointmentQuery.data?.error, appointmentQuery.error);
+
+  const contextData: DockContextData = {
+    job: {
+      data: jobData ?? null,
+      isLoading: jobEnabled && !jobData && jobQuery.isLoading,
+      error: !jobData ? jobErrorMessage : null,
+      onRetry: jobEnabled ? () => jobQuery.refetch() : undefined,
+      onRefresh: jobEnabled ? () => jobQuery.refetch() : undefined,
+    },
+    customer: {
+      data: customerData ?? null,
+      isLoading: customerEnabled && !customerData && customerQuery.isLoading,
+      error: !customerData ? customerErrorMessage : null,
+      onRetry: customerEnabled ? () => customerQuery.refetch() : undefined,
+      onRefresh: customerEnabled ? () => customerQuery.refetch() : undefined,
+    },
+    vehicle: {
+      data: vehicleData ?? null,
+      isLoading: vehicleEnabled && !vehicleData && vehicleQuery.isLoading,
+      error: !vehicleData ? vehicleErrorMessage : null,
+      onRetry: vehicleEnabled ? () => vehicleQuery.refetch() : undefined,
+      onRefresh: vehicleEnabled ? () => vehicleQuery.refetch() : undefined,
+    },
+    call: {
+      data: callData ?? null,
+      isLoading: callEnabled && !callData && callQuery.isLoading,
+      error: !callData ? callErrorMessage : null,
+      onRetry: callEnabled ? () => callQuery.refetch() : undefined,
+      onRefresh: callEnabled ? () => callQuery.refetch() : undefined,
+    },
+    appointment: {
+      data: appointmentData ?? null,
+      isLoading: appointmentEnabled && !appointmentData && appointmentQuery.isLoading,
+      error: !appointmentData ? appointmentErrorMessage : null,
+      onRetry: appointmentEnabled ? () => appointmentQuery.refetch() : undefined,
+      onRefresh: appointmentEnabled ? () => appointmentQuery.refetch() : undefined,
+    },
+  };
+
   const togglePanel = useCallback(() => {
     toggleDock();
   }, [toggleDock]);
 
-  // Handle panel close
   const closePanel = useCallback(() => {
     closeDock();
   }, [closeDock]);
 
-  // Handle context change
-  const setContext = useCallback((context: DockPanelContext, contextData?: any) => {
-    setDockContext(context, contextData);
+  const handleMenuClick = useCallback(() => {
+    showMenu();
+  }, [showMenu]);
+
+  const setContext = useCallback((context: DockPanelContext) => {
+    setDockContext(context);
   }, [setDockContext]);
 
-  // Handle pin toggle
-  const togglePin = useCallback(() => {
-    setPanelState(prev => ({
-      ...prev,
-      isPinned: !prev.isPinned,
-    }));
-    
-    addToast({
-      type: 'success',
-      title: panelState.isPinned ? 'Panel Unpinned' : 'Panel Pinned',
-      message: panelState.isPinned ? 'Panel will auto-hide when not in use' : 'Panel will stay open',
-      duration: 2000,
-    });
-  }, [panelState.isPinned, addToast]);
-
-  // Handle maximize toggle
   const toggleMaximize = useCallback(() => {
-    setPanelState(prev => ({
+    setPanelLayout((prev) => ({
       ...prev,
       isMaximized: !prev.isMaximized,
       width: !prev.isMaximized ? PANEL_WIDTHS.maximized : PANEL_WIDTHS.normal,
     }));
   }, []);
 
-  // Handle resize start
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
     setResizeStartX(e.clientX);
-    setResizeStartWidth(panelState.width);
-  }, [panelState.width]);
+    setResizeStartWidth(panelLayout.width);
+  }, [panelLayout.width]);
 
-  // Handle resize
   useEffect(() => {
     if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = resizeStartX - e.clientX; // Negative because panel is on the right
       const newWidth = Math.max(300, Math.min(1000, resizeStartWidth + deltaX));
-      
-      setPanelState(prev => ({
+
+      setPanelLayout((prev) => ({
         ...prev,
         width: newWidth,
+        isMaximized: newWidth >= PANEL_WIDTHS.maximized ? prev.isMaximized : false,
       }));
     };
 
@@ -216,34 +345,31 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
 
   // Auto-hide logic when not pinned
   useEffect(() => {
-    if (panelState.isPinned || !panelState.isOpen) return;
+    if (panelLayout.isPinned || !isDockOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Element;
       const panel = document.getElementById('right-dock-panel');
-      
+
       if (panel && !panel.contains(target)) {
-        // Add a small delay to prevent immediate closing when clicking to open
         setTimeout(() => {
-          setPanelState(prev => ({
-            ...prev,
-            isOpen: false,
-          }));
+          closeDock();
         }, 100);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [panelState.isPinned, panelState.isOpen]);
-
-  const contextConfig = CONTEXT_CONFIGS[panelState.context];
+  }, [panelLayout.isPinned, isDockOpen, closeDock]);
+  const contextConfig = CONTEXT_CONFIGS[dockContext] ?? CONTEXT_CONFIGS['menu'];
   const ContextIcon = contextConfig.icon;
+  const shouldShowMenu = dockView === 'menu' || dockContext === 'menu' || dockContext === 'empty';
+  const hasContextData = Boolean(dockData);
 
   return (
     <>
       {/* Panel Toggle Button (when closed) */}
-      {!panelState.isOpen && (
+      {!isDockOpen && (
         <div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-40">
           <Button
             variant="outline"
@@ -261,10 +387,10 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
         id="right-dock-panel"
         className={cn(
           'fixed right-0 top-0 h-full bg-white border-l shadow-xl z-30 transition-all duration-300 ease-in-out',
-          panelState.isOpen ? 'translate-x-0' : 'translate-x-full',
+          isDockOpen ? 'translate-x-0' : 'translate-x-full',
           className
         )}
-        style={{ width: panelState.isOpen ? panelState.width : 0 }}
+        style={{ width: isDockOpen ? panelLayout.width : 0 }}
       >
         {/* Resize Handle */}
         <div
@@ -283,9 +409,9 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
             </div>
             <div>
               <h2 className="font-semibold text-lg">{contextConfig.title}</h2>
-              {panelState.contextData && (
+              {hasContextData && (
                 <p className="text-sm text-muted-foreground">
-                  {panelState.contextData.title || panelState.contextData.name || 'Details'}
+                  {dockData.title || dockData.name || 'Details'}
                 </p>
               )}
             </div>
@@ -295,15 +421,11 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={togglePin}
-              className="h-8 w-8 p-0"
-              title={panelState.isPinned ? 'Unpin panel' : 'Pin panel'}
+              onClick={handleMenuClick}
+              className="h-8 px-3"
+              title="Back to menu"
             >
-              {panelState.isPinned ? (
-                <PinOff className="h-4 w-4" />
-              ) : (
-                <Pin className="h-4 w-4" />
-              )}
+              Menu
             </Button>
 
             <Button
@@ -311,9 +433,9 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
               size="sm"
               onClick={toggleMaximize}
               className="h-8 w-8 p-0"
-              title={panelState.isMaximized ? 'Restore panel' : 'Maximize panel'}
+              title={panelLayout.isMaximized ? 'Restore panel' : 'Maximize panel'}
             >
-              {panelState.isMaximized ? (
+              {panelLayout.isMaximized ? (
                 <Minimize2 className="h-4 w-4" />
               ) : (
                 <Maximize2 className="h-4 w-4" />
@@ -335,13 +457,18 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
         {/* Panel Content */}
         <ScrollArea className="flex-1 h-[calc(100vh-80px)]">
           <div className="p-4">
-            {panelState.context === 'empty' ? (
-              <EmptyState onContextSelect={setContext} />
+            {shouldShowMenu ? (
+              <MenuView
+                onContextSelect={setContext}
+                recentItems={recentItems}
+                onRecentSelect={selectItem}
+                onRecentHover={handleRecentHover}
+              />
             ) : (
               <ContextContent
-                context={panelState.context}
-                data={panelState.contextData}
-                onContextChange={setContext}
+                context={dockContext}
+                payload={dockPayload}
+                contextData={contextData}
               />
             )}
           </div>
@@ -350,14 +477,9 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
         {/* Panel Footer */}
         <div className="p-4 border-t bg-gray-50">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>Width: {panelState.width}px</span>
+            <span>Width: {panelLayout.width}px</span>
             <div className="flex items-center gap-2">
-              {panelState.isPinned && (
-                <Badge variant="secondary" className="text-xs">
-                  Pinned
-                </Badge>
-              )}
-              {panelState.isMaximized && (
+              {panelLayout.isMaximized && (
                 <Badge variant="secondary" className="text-xs">
                   Maximized
                 </Badge>
@@ -368,7 +490,7 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
       </div>
 
       {/* Overlay when panel is open and not pinned */}
-      {panelState.isOpen && !panelState.isPinned && (
+      {isDockOpen && !panelLayout.isPinned && (
         <div 
           className="fixed inset-0 bg-black/20 z-20"
           onClick={closePanel}
@@ -378,8 +500,18 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
   );
 }
 
-// Empty state component
-function EmptyState({ onContextSelect }: { onContextSelect: (context: DockPanelContext) => void }) {
+// Menu view component
+function MenuView({
+  onContextSelect,
+  recentItems,
+  onRecentSelect,
+  onRecentHover,
+}: {
+  onContextSelect: (context: DockPanelContext) => void;
+  recentItems: SelectionItem[];
+  onRecentSelect: (item: Omit<SelectionItem, 'timestamp'>) => void;
+  onRecentHover?: (item: SelectionItem) => void;
+}) {
   const contextOptions = [
     { key: 'job-details' as const, label: 'Job Details', description: 'View and manage job information' },
     { key: 'customer-details' as const, label: 'Customer Details', description: 'Customer information and history' },
@@ -425,195 +557,47 @@ function EmptyState({ onContextSelect }: { onContextSelect: (context: DockPanelC
           );
         })}
       </div>
-    </div>
-  );
-}
 
-// Context content component
-function ContextContent({ 
-  context, 
-  data, 
-  onContextChange 
-}: { 
-  context: DockPanelContext;
-  data: any;
-  onContextChange: (context: DockPanelContext, data?: any) => void;
-}) {
-  switch (context) {
-    case 'job-details':
-      return <JobDetailsContent data={data} onContextChange={onContextChange} />;
-    case 'customer-details':
-      return <CustomerDetailsContent data={data} onContextChange={onContextChange} />;
-    case 'vehicle-details':
-      return <VehicleDetailsContent data={data} onContextChange={onContextChange} />;
-    case 'call-details':
-      return <CallDetailsContent data={data} onContextChange={onContextChange} />;
-    case 'appointment-details':
-      return <AppointmentDetailsContent data={data} onContextChange={onContextChange} />;
-    default:
-      return <div>Unknown context</div>;
-  }
-}
-
-// Content components using dedicated views
-function JobDetailsContent({ data, onContextChange }: any) {
-  return (
-    <JobDetailsView
-      jobId={data?.id || 'job-001'}
-      onJobUpdate={(job) => console.log('Job updated:', job)}
-      onJobAction={(action, jobId) => console.log('Job action:', action, jobId)}
-    />
-  );
-}
-
-function VehicleDetailsContent({ data, onContextChange }: any) {
-  return (
-    <VehicleDetailsView
-      vehicleId={data?.id || 'veh-001'}
-      onVehicleUpdate={(vehicle) => console.log('Vehicle updated:', vehicle)}
-      onVehicleAction={(action, vehicleId) => console.log('Vehicle action:', action, vehicleId)}
-      onContextChange={onContextChange}
-    />
-  );
-}
-
-// Legacy placeholder content components
-function LegacyJobDetailsContent({ data, onContextChange }: any) {
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Job Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Job ID</label>
-                <div className="text-sm">JOB-001</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Status</label>
-                <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  In Progress
-                </Badge>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Priority</label>
-                <Badge variant="outline" className="bg-orange-100 text-orange-800">
-                  High
-                </Badge>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Technician</label>
-                <div className="text-sm">Mike Johnson</div>
-              </div>
-            </div>
-            
-            <Separator />
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Service Type</label>
-              <div className="text-sm mt-1">Brake Pad Replacement</div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Description</label>
-              <div className="text-sm mt-1">Replace front brake pads and inspect rotors. Customer reported grinding noise.</div>
-            </div>
+      <div className="space-y-3">
+        <h4 className="font-medium">Recent Activity</h4>
+        {recentItems.length === 0 ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">No recent selections yet.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {recentItems.slice(0, 5).map((item) => (
+              <Card
+                key={`${item.type}-${item.id}`}
+                className="cursor-pointer hover:shadow-sm transition-shadow"
+                onClick={() =>
+                  onRecentSelect({
+                    id: item.id,
+                    type: item.type,
+                    title: item.title,
+                    subtitle: item.subtitle,
+                    data: item.data,
+                  })
+                }
+                onMouseEnter={() => onRecentHover?.(item)}
+                onFocus={() => onRecentHover?.(item)}
+              >
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{item.title}</div>
+                    {item.subtitle && (
+                      <div className="text-xs text-muted-foreground">{item.subtitle}</div>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Job Timeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">Job Created</div>
-                <div className="text-xs text-muted-foreground">2 hours ago</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Activity className="h-4 w-4 text-blue-600" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">Work Started</div>
-                <div className="text-xs text-muted-foreground">1 hour ago</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Clock className="h-4 w-4 text-gray-400" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">Estimated Completion</div>
-                <div className="text-xs text-muted-foreground">In 1 hour</div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function CustomerDetailsContent({ data, onContextChange }: any) {
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Customer Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Name</label>
-              <div className="text-lg font-semibold">John Smith</div>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-3">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">(555) 123-4567</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">john@example.com</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">123 Main St, City, ST 12345</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className="text-lg font-semibold">4.8</div>
-                <div className="flex items-center gap-1">
-                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  <span className="text-xs text-muted-foreground">Rating</span>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold">12</div>
-                <div className="text-xs text-muted-foreground">Jobs</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold">$2,450</div>
-                <div className="text-xs text-muted-foreground">Lifetime Value</div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
@@ -644,103 +628,155 @@ function CustomerDetailsContent({ data, onContextChange }: any) {
   );
 }
 
+// Context content component
+function ContextContent({
+  context,
+  payload,
+  contextData,
+}: {
+  context: DockPanelContext;
+  payload: DockPayload | null;
+  contextData: DockContextData;
+}) {
+  switch (context) {
+    case 'job-details':
+      return <JobDetailsContent payload={payload} state={contextData.job} />;
+    case 'customer-details':
+      return <CustomerDetailsContent payload={payload} state={contextData.customer} />;
+    case 'vehicle-details':
+      return <VehicleDetailsContent payload={payload} state={contextData.vehicle} />;
+    case 'call-details':
+      return <CallDetailsContent payload={payload} state={contextData.call} />;
+    case 'appointment-details':
+      return <AppointmentDetailsContent payload={payload} state={contextData.appointment} />;
+    default:
+      return <div>Unknown context</div>;
+  }
+}
 
-function CallDetailsContent({ data, onContextChange }: any) {
+// Content components using dedicated views
+function JobDetailsContent({
+  payload,
+  state,
+}: {
+  payload: DockPayload | null;
+  state: ContextViewState<JobWithRelations>;
+}) {
+  const jobId = payload?.entityId ?? state.data?.id ?? 'job-unknown';
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            Call Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Call ID</label>
-                <div className="text-sm">CALL-001</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Duration</label>
-                <div className="text-sm">7 minutes</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Outcome</label>
-                <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  Scheduled
-                </Badge>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Priority</label>
-                <Badge variant="outline" className="bg-orange-100 text-orange-800">
-                  High
-                </Badge>
-              </div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Reason</label>
-              <div className="text-sm mt-1">Customer reported grinding noise when braking</div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Notes</label>
-              <div className="text-sm mt-1">Customer wants appointment scheduled for next week. Mentioned noise is getting worse.</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <JobDetailsView
+      jobId={jobId}
+      job={state.data}
+      isLoading={state.isLoading}
+      error={state.error}
+      onRetry={state.onRetry}
+      onRefresh={state.onRefresh}
+      onJobAction={(action, id) => console.log('Job action:', action, id)}
+      onAddNote={(note, id) => console.log('Job note submitted:', note, id)}
+      onInvoiceChange={(invoice, id) => console.log('Invoice updated:', invoice, id)}
+    />
   );
 }
 
-function AppointmentDetailsContent({ data, onContextChange }: any) {
+function VehicleDetailsContent({
+  payload,
+  state,
+}: {
+  payload: DockPayload | null;
+  state: ContextViewState<VehicleWithHistory>;
+}) {
+  const vehicleId = payload?.entityId ?? state.data?.id ?? 'vehicle-unknown';
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Appointment Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Date</label>
-                <div className="text-sm">March 25, 2024</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Time</label>
-                <div className="text-sm">10:00 AM - 12:00 PM</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Bay</label>
-                <div className="text-sm">Bay 2</div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Technician</label>
-                <div className="text-sm">Mike Johnson</div>
-              </div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Service</label>
-              <div className="text-sm mt-1">Brake Pad Replacement</div>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Estimated Cost</label>
-              <div className="text-lg font-semibold mt-1">$350</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <VehicleDetailsView
+      vehicleId={vehicleId}
+      vehicle={state.data ?? null}
+      isLoading={state.isLoading}
+      error={state.error}
+      onRetry={state.onRetry}
+      onRefresh={state.onRefresh}
+      onAddNote={(note, id) => console.log('Vehicle note submitted:', note, id)}
+    />
   );
+}
+
+function CustomerDetailsContent({
+  payload,
+  state,
+}: {
+  payload: DockPayload | null;
+  state: ContextViewState<CustomerWithVehicles>;
+}) {
+  const customerId = payload?.entityId ?? state.data?.id ?? 'customer-unknown';
+  return (
+    <CustomerDetailsView
+      customerId={customerId}
+      customer={state.data ?? null}
+      isLoading={state.isLoading}
+      error={state.error}
+      onRetry={state.onRetry}
+      onRefresh={state.onRefresh}
+    />
+  );
+}
+
+function CallDetailsContent({
+  payload,
+  state,
+}: {
+  payload: DockPayload | null;
+  state: ContextViewState<Call>;
+}) {
+  const callId = payload?.entityId ?? state.data?.id ?? 'call-unknown';
+  return (
+    <CallDetailsView
+      callId={callId}
+      call={state.data ?? null}
+      isLoading={state.isLoading}
+      error={state.error}
+      onRetry={state.onRetry}
+      onRefresh={state.onRefresh}
+      onScheduleFollowUp={(id) => console.log('Schedule follow-up for call:', id)}
+    />
+  );
+}
+
+function AppointmentDetailsContent({
+  payload,
+  state,
+}: {
+  payload: DockPayload | null;
+  state: ContextViewState<AppointmentWithJob>;
+}) {
+  const appointmentId = payload?.entityId ?? state.data?.id ?? 'appointment-unknown';
+  return (
+    <AppointmentDetailsView
+      appointmentId={appointmentId}
+      appointment={state.data ?? null}
+      isLoading={state.isLoading}
+      error={state.error}
+      onRetry={state.onRetry}
+      onRefresh={state.onRefresh}
+      onEdit={(id) => console.log('Edit appointment', id)}
+    />
+  );
+}
+
+function getQueryErrorMessage(responseError?: string, error?: unknown): string | null {
+  if (responseError) {
+    return responseError;
+  }
+  if (!error) {
+    return null;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  try {
+    return String(error);
+  } catch {
+    return 'Unknown error';
+  }
 }
 
 export default RightDockPanel;
+

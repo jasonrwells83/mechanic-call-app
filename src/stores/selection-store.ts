@@ -5,13 +5,23 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { DockPanelContext } from '@/components/layout/RightDockPanel';
 
+export type SelectionType = 'job' | 'customer' | 'vehicle' | 'call' | 'appointment';
+export type DockView = 'menu' | 'context';
+
 export interface SelectionItem {
   id: string;
-  type: 'job' | 'customer' | 'vehicle' | 'call' | 'appointment';
+  type: SelectionType;
   title: string;
   subtitle?: string;
   data: any;
   timestamp: Date;
+}
+
+export interface DockPayload {
+  entityType: SelectionType;
+  entityId: string;
+  initialData?: any;
+  source?: string;
 }
 
 export interface SelectionHistory {
@@ -22,19 +32,20 @@ export interface SelectionHistory {
 export interface SelectionState {
   // Current Selection
   currentSelection: SelectionItem | null;
-  
+
   // Selection History
   history: SelectionHistory;
-  
+
   // Dock Panel State
   dockContext: DockPanelContext;
   dockData: any;
   isDockOpen: boolean;
-  
+  dockView: DockView;
+  dockPayload: DockPayload | null;
+
   // Quick Access
-  pinnedItems: SelectionItem[];
   recentItems: SelectionItem[];
-  
+
   // Actions
   selectItem: (item: Omit<SelectionItem, 'timestamp'>) => void;
   clearSelection: () => void;
@@ -42,34 +53,31 @@ export interface SelectionState {
   toggleDock: () => void;
   openDock: () => void;
   closeDock: () => void;
-  
+  showMenu: () => void;
+  openContext: (payload: DockPayload) => void;
+  resetDock: () => void;
+
   // History Management
   addToHistory: (item: SelectionItem) => void;
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
-  
-  // Pinned Items
-  pinItem: (item: SelectionItem) => void;
-  unpinItem: (id: string) => void;
-  isPinned: (id: string) => boolean;
-  
+
   // Recent Items
   addToRecent: (item: SelectionItem) => void;
   clearRecent: () => void;
-  
+
   // Utilities
-  getContextFromType: (type: SelectionItem['type']) => DockPanelContext;
+  getContextFromType: (type: SelectionType) => DockPanelContext;
   canSelectType: (type: string) => boolean;
   getSelectionTitle: (item: SelectionItem) => string;
-  getSelectionIcon: (type: SelectionItem['type']) => string;
+  getSelectionIcon: (type: SelectionType) => string;
 }
 
 const MAX_HISTORY_ITEMS = 50;
 const MAX_RECENT_ITEMS = 10;
-const MAX_PINNED_ITEMS = 5;
 
 // Map selection types to dock contexts
-const TYPE_TO_CONTEXT_MAP: Record<SelectionItem['type'], DockPanelContext> = {
+const TYPE_TO_CONTEXT_MAP: Record<SelectionType, DockPanelContext> = {
   job: 'job-details',
   customer: 'customer-details',
   vehicle: 'vehicle-details',
@@ -78,47 +86,63 @@ const TYPE_TO_CONTEXT_MAP: Record<SelectionItem['type'], DockPanelContext> = {
 };
 
 // Supported selection types
-const SUPPORTED_TYPES: SelectionItem['type'][] = ['job', 'customer', 'vehicle', 'call', 'appointment'];
+const SUPPORTED_TYPES: SelectionType[] = ['job', 'customer', 'vehicle', 'call', 'appointment'];
+
+const createInitialHistory = (): SelectionHistory => ({
+  items: [],
+  maxItems: MAX_HISTORY_ITEMS,
+});
 
 export const useSelectionStore = create<SelectionState>()(
   persist(
     (set, get) => ({
       // Initial State
       currentSelection: null,
-      history: {
-        items: [],
-        maxItems: MAX_HISTORY_ITEMS,
-      },
-      dockContext: 'empty',
+      history: createInitialHistory(),
+      dockContext: 'menu',
       dockData: null,
       isDockOpen: false,
-      pinnedItems: [],
+      dockView: 'menu',
+      dockPayload: null,
       recentItems: [],
 
       // Selection Actions
       selectItem: (item) => {
+        if (!get().canSelectType(item.type)) {
+          return;
+        }
+
         const fullItem: SelectionItem = {
           ...item,
           timestamp: new Date(),
         };
 
+        const context = get().getContextFromType(item.type);
+
         set((state) => {
-          // Update current selection
-          const newState = {
+          const isSameSelection =
+            state.currentSelection?.id === item.id && state.currentSelection.type === item.type;
+
+          const nextState = {
             ...state,
             currentSelection: fullItem,
-            dockContext: get().getContextFromType(item.type),
+            dockContext: context,
             dockData: item.data,
+            dockView: 'context' as DockView,
+            dockPayload: {
+              entityType: item.type,
+              entityId: item.id,
+              initialData: item.data,
+            },
             isDockOpen: true,
           };
 
-          // Add to history if it's a different item
-          if (!state.currentSelection || state.currentSelection.id !== item.id) {
+          if (!isSameSelection) {
             get().addToHistory(fullItem);
             get().addToRecent(fullItem);
           }
 
-          return newState;
+          return nextState;
         });
       },
 
@@ -126,18 +150,28 @@ export const useSelectionStore = create<SelectionState>()(
         set((state) => ({
           ...state,
           currentSelection: null,
-          dockContext: 'empty',
+          dockContext: 'menu',
           dockData: null,
+          dockView: 'menu',
+          dockPayload: null,
         }));
       },
 
       setDockContext: (context, data) => {
-        set((state) => ({
-          ...state,
-          dockContext: context,
-          dockData: data,
-          isDockOpen: context !== 'empty',
-        }));
+        set((state) => {
+          const isMenu = context === 'menu';
+          const isEmpty = context === 'empty';
+          const isContextView = !isMenu && !isEmpty;
+
+          return {
+            ...state,
+            dockContext: context,
+            dockData: data ?? (isMenu || isEmpty ? null : state.dockData),
+            dockView: isMenu ? 'menu' : isContextView ? 'context' : state.dockView,
+            dockPayload: isContextView ? state.dockPayload : null,
+            isDockOpen: isEmpty ? false : true,
+          };
+        });
       },
 
       toggleDock: () => {
@@ -161,21 +195,59 @@ export const useSelectionStore = create<SelectionState>()(
         }));
       },
 
+      showMenu: () => {
+        set((state) => ({
+          ...state,
+          dockContext: 'menu',
+          dockData: null,
+          dockView: 'menu',
+          dockPayload: null,
+          isDockOpen: true,
+        }));
+      },
+
+      openContext: (payload) => {
+        if (!get().canSelectType(payload.entityType)) {
+          return;
+        }
+
+        const context = get().getContextFromType(payload.entityType);
+
+        set((state) => ({
+          ...state,
+          dockContext: context,
+          dockData: payload.initialData ?? null,
+          dockView: 'context',
+          dockPayload: payload,
+          isDockOpen: true,
+        }));
+      },
+
+      resetDock: () => {
+        set((state) => ({
+          ...state,
+          dockContext: 'menu',
+          dockData: null,
+          dockView: 'menu',
+          dockPayload: null,
+          isDockOpen: false,
+        }));
+      },
+
       // History Management
       addToHistory: (item) => {
         set((state) => {
-          const existingIndex = state.history.items.findIndex(h => h.id === item.id && h.type === item.type);
+          const existingIndex = state.history.items.findIndex(
+            (h) => h.id === item.id && h.type === item.type,
+          );
           let newItems = [...state.history.items];
 
           if (existingIndex >= 0) {
-            // Update existing item timestamp and move to front
             newItems.splice(existingIndex, 1);
           }
 
-          // Add to front
           newItems.unshift(item);
 
-          // Limit size
           if (newItems.length > state.history.maxItems) {
             newItems = newItems.slice(0, state.history.maxItems);
           }
@@ -205,64 +277,32 @@ export const useSelectionStore = create<SelectionState>()(
           ...state,
           history: {
             ...state.history,
-            items: state.history.items.filter(item => item.id !== id),
+            items: state.history.items.filter((item) => item.id !== id),
           },
         }));
       },
 
-      // Pinned Items Management
-      pinItem: (item) => {
-        set((state) => {
-          if (state.pinnedItems.length >= MAX_PINNED_ITEMS) {
-            return state; // Don't add if at max capacity
-          }
-
-          const isAlreadyPinned = state.pinnedItems.some(p => p.id === item.id && p.type === item.type);
-          if (isAlreadyPinned) {
-            return state; // Don't add duplicates
-          }
-
-          return {
-            ...state,
-            pinnedItems: [...state.pinnedItems, item],
-          };
-        });
-      },
-
-      unpinItem: (id) => {
-        set((state) => ({
-          ...state,
-          pinnedItems: state.pinnedItems.filter(item => item.id !== id),
-        }));
-      },
-
-      isPinned: (id) => {
-        const state = get();
-        return state.pinnedItems.some(item => item.id === id);
-      },
-
-      // Recent Items Management
+      // Recent Items
       addToRecent: (item) => {
         set((state) => {
-          const existingIndex = state.recentItems.findIndex(r => r.id === item.id && r.type === item.type);
-          let newItems = [...state.recentItems];
+          const existingIndex = state.recentItems.findIndex(
+            (recent) => recent.id === item.id && recent.type === item.type,
+          );
+          let newRecent = [...state.recentItems];
 
           if (existingIndex >= 0) {
-            // Remove existing to avoid duplicates
-            newItems.splice(existingIndex, 1);
+            newRecent.splice(existingIndex, 1);
           }
 
-          // Add to front
-          newItems.unshift(item);
+          newRecent.unshift(item);
 
-          // Limit size
-          if (newItems.length > MAX_RECENT_ITEMS) {
-            newItems = newItems.slice(0, MAX_RECENT_ITEMS);
+          if (newRecent.length > MAX_RECENT_ITEMS) {
+            newRecent = newRecent.slice(0, MAX_RECENT_ITEMS);
           }
 
           return {
             ...state,
-            recentItems: newItems,
+            recentItems: newRecent,
           };
         });
       },
@@ -274,30 +314,29 @@ export const useSelectionStore = create<SelectionState>()(
         }));
       },
 
-      // Utility Functions
+      // Utilities
       getContextFromType: (type) => {
-        return TYPE_TO_CONTEXT_MAP[type] || 'empty';
+        return TYPE_TO_CONTEXT_MAP[type] ?? 'empty';
       },
 
       canSelectType: (type) => {
-        return SUPPORTED_TYPES.includes(type as SelectionItem['type']);
+        return SUPPORTED_TYPES.includes(type as SelectionType);
       },
 
       getSelectionTitle: (item) => {
-        if (item.title) return item.title;
-        
-        // Generate title based on type
         switch (item.type) {
           case 'job':
-            return `Job ${item.id}`;
+            return item.title || `Job ${item.id}`;
           case 'customer':
-            return `Customer ${item.data?.name || item.id}`;
-          case 'vehicle':
-            return `${item.data?.year || ''} ${item.data?.make || ''} ${item.data?.model || ''}`.trim() || `Vehicle ${item.id}`;
+            return item.data?.name || item.title || `Customer ${item.id}`;
+          case 'vehicle': {
+            const base = `${item.data?.year || ''} ${item.data?.make || ''} ${item.data?.model || ''}`.trim();
+            return base || item.title || `Vehicle ${item.id}`;
+          }
           case 'call':
-            return `Call ${item.id}`;
+            return item.title || `Call ${item.id}`;
           case 'appointment':
-            return `Appointment ${item.id}`;
+            return item.title || `Appointment ${item.id}`;
           default:
             return item.id;
         }
@@ -323,11 +362,8 @@ export const useSelectionStore = create<SelectionState>()(
     {
       name: 'selection-store',
       partialize: (state) => ({
-        // Only persist certain parts of the state
         history: state.history,
-        pinnedItems: state.pinnedItems,
         recentItems: state.recentItems,
-        // Don't persist current selection or dock state
       }),
     }
   )
@@ -336,7 +372,7 @@ export const useSelectionStore = create<SelectionState>()(
 // Convenience hooks for specific selection types
 export const useJobSelection = () => {
   const selectItem = useSelectionStore((state) => state.selectItem);
-  
+
   return {
     selectJob: (jobId: string, jobData: any, title?: string) => {
       selectItem({
@@ -352,7 +388,7 @@ export const useJobSelection = () => {
 
 export const useCustomerSelection = () => {
   const selectItem = useSelectionStore((state) => state.selectItem);
-  
+
   return {
     selectCustomer: (customerId: string, customerData: any, title?: string) => {
       selectItem({
@@ -368,13 +404,13 @@ export const useCustomerSelection = () => {
 
 export const useVehicleSelection = () => {
   const selectItem = useSelectionStore((state) => state.selectItem);
-  
+
   return {
     selectVehicle: (vehicleId: string, vehicleData: any, title?: string) => {
       const vehicleTitle = title || 
         `${vehicleData?.year || ''} ${vehicleData?.make || ''} ${vehicleData?.model || ''}`.trim() ||
         `Vehicle ${vehicleId}`;
-      
+
       selectItem({
         id: vehicleId,
         type: 'vehicle',
@@ -388,7 +424,7 @@ export const useVehicleSelection = () => {
 
 export const useCallSelection = () => {
   const selectItem = useSelectionStore((state) => state.selectItem);
-  
+
   return {
     selectCall: (callId: string, callData: any, title?: string) => {
       selectItem({
@@ -404,7 +440,7 @@ export const useCallSelection = () => {
 
 export const useAppointmentSelection = () => {
   const selectItem = useSelectionStore((state) => state.selectItem);
-  
+
   return {
     selectAppointment: (appointmentId: string, appointmentData: any, title?: string) => {
       selectItem({

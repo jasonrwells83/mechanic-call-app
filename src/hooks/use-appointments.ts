@@ -25,11 +25,11 @@ export function useAppointments(filters?: {
 }
 
 // Fetch single appointment
-export function useAppointment(appointmentId: string) {
+export function useAppointment(appointmentId: string, enabled: boolean = true) {
   return useQuery({
     queryKey: queryKeys.appointments.detail(appointmentId),
     queryFn: () => appointmentApi.getById(appointmentId),
-    enabled: !!appointmentId,
+    enabled: enabled && !!appointmentId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -291,3 +291,4 @@ export function useCancelAppointment() {
     },
   });
 }
+

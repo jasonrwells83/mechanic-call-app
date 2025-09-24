@@ -1,1002 +1,620 @@
-import React, { useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Wrench,
-  User,
-  Car,
+  AlertCircle,
   Calendar,
+  CheckCircle2,
   Clock,
-  DollarSign,
   FileText,
-  CheckCircle,
-  AlertTriangle,
-  Activity,
   Pause,
   Play,
-  Square,
-  Edit,
-  Save,
-  X,
-  Plus,
-  MoreHorizontal,
-  Phone,
-  Mail,
-  MessageSquare,
-  Star,
-  MapPin,
-  Timer,
-  TrendingUp,
-  Settings,
-  Camera,
-  Paperclip,
-  Flag,
-  Target,
-  Zap,
+  RefreshCcw,
+  User,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, formatDistanceToNow, addHours } from 'date-fns';
-import { useUIStore } from '@/stores';
+import type {
+  JobAttachment,
+  JobMilestone,
+  JobNote,
+  JobWithRelations,
+  JobPriority,
+  JobStatus,
+} from '@/types';
 
-export interface JobDetails {
-  id: string;
-  jobNumber: string;
-  title: string;
-  description: string;
-  status: 'pending' | 'in-progress' | 'paused' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  category: 'maintenance' | 'repair' | 'diagnostic' | 'emergency';
-  
-  // Customer & Vehicle
-  customer: {
-    id: string;
-    name: string;
-    phone: string;
-    email: string;
-    address: string;
-  };
-  vehicle: {
-    id: string;
-    make: string;
-    model: string;
-    year: string;
-    vin: string;
-    license: string;
-    mileage: number;
-    color: string;
-  };
+export type JobPanelAction = 'start' | 'pause' | 'complete' | 'cancel';
 
-  // Scheduling
-  scheduledDate?: Date;
-  startDate?: Date;
-  completedDate?: Date;
-  estimatedDuration: number; // minutes
-  actualDuration?: number; // minutes
-  
-  // Assignment
-  assignedTechnician?: {
-    id: string;
-    name: string;
-    specialties: string[];
-    rating: number;
-  };
-  bay?: {
-    id: string;
-    name: string;
-    type: string;
-  };
-
-  // Financial
-  estimatedCost: number;
-  actualCost?: number;
-  laborCost?: number;
-  partsCost?: number;
-  invoiceNumber?: string;
-  
-  // Progress
-  progressPercentage: number;
-  milestones: JobMilestone[];
-  
-  // Communication
-  notes: JobNote[];
-  attachments: JobAttachment[];
-  
-  // Metadata
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-}
-
-export interface JobMilestone {
-  id: string;
-  title: string;
-  description: string;
-  status: 'pending' | 'in-progress' | 'completed';
-  completedAt?: Date;
-  completedBy?: string;
-  estimatedDuration: number;
-  actualDuration?: number;
-}
-
-export interface JobNote {
-  id: string;
+export interface JobNotePayload {
   content: string;
-  type: 'general' | 'technical' | 'customer' | 'internal';
-  author: string;
-  createdAt: Date;
-  isImportant: boolean;
-}
-
-export interface JobAttachment {
-  id: string;
-  name: string;
-  type: 'image' | 'document' | 'video';
-  url: string;
-  size: number;
-  uploadedBy: string;
-  uploadedAt: Date;
+  type?: JobNote['type'];
+  isImportant?: boolean;
 }
 
 interface JobDetailsViewProps {
   jobId: string;
-  onJobUpdate?: (job: JobDetails) => void;
-  onJobAction?: (action: string, jobId: string) => void;
-  className?: string;
+  job?: JobWithRelations | null;
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  onJobAction?: (action: JobPanelAction, jobId: string) => void;
+  onAddNote?: (payload: JobNotePayload, jobId: string) => Promise<void> | void;
+  onInvoiceChange?: (invoiceNumber: string | null, jobId: string) => Promise<void> | void;
+  onRefresh?: () => void;
 }
 
-// Mock job data
-const mockJob: JobDetails = {
-  id: 'job-001',
-  jobNumber: 'JOB-001',
-  title: 'Brake Pad Replacement',
-  description: 'Replace front brake pads and inspect rotors. Customer reported grinding noise when braking.',
-  status: 'in-progress',
-  priority: 'high',
-  category: 'repair',
-  invoiceNumber: 'INV-1042',
-  
-  customer: {
-    id: 'cust-001',
-    name: 'John Smith',
-    phone: '(555) 123-4567',
-    email: 'john@example.com',
-    address: '123 Main St, City, ST 12345',
-  },
-  
-  vehicle: {
-    id: 'veh-001',
-    make: 'Honda',
-    model: 'Civic',
-    year: '2020',
-    vin: '1HGBH41JXMN109186',
-    license: 'ABC-1234',
-    mileage: 45230,
-    color: 'Silver',
-  },
-
-  scheduledDate: new Date(),
-  startDate: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-  estimatedDuration: 180, // 3 hours
-  actualDuration: 120, // 2 hours so far
-
-  assignedTechnician: {
-    id: 'tech-001',
-    name: 'Mike Johnson',
-    specialties: ['brakes', 'suspension', 'general-repair'],
-    rating: 4.8,
-  },
-
-  bay: {
-    id: 'bay-002',
-    name: 'Bay 2',
-    type: 'lift',
-  },
-
-  estimatedCost: 350,
-  actualCost: 320,
-  laborCost: 200,
-  partsCost: 120,
-
-  progressPercentage: 65,
-  milestones: [
-    {
-      id: 'milestone-1',
-      title: 'Initial Inspection',
-      description: 'Inspect brake system and identify issues',
-      status: 'completed',
-      completedAt: new Date(Date.now() - 90 * 60 * 1000),
-      completedBy: 'Mike Johnson',
-      estimatedDuration: 30,
-      actualDuration: 25,
-    },
-    {
-      id: 'milestone-2',
-      title: 'Remove Old Brake Pads',
-      description: 'Remove worn brake pads and clean calipers',
-      status: 'completed',
-      completedAt: new Date(Date.now() - 60 * 60 * 1000),
-      completedBy: 'Mike Johnson',
-      estimatedDuration: 45,
-      actualDuration: 40,
-    },
-    {
-      id: 'milestone-3',
-      title: 'Install New Brake Pads',
-      description: 'Install new brake pads and reassemble',
-      status: 'in-progress',
-      estimatedDuration: 60,
-      actualDuration: 45,
-    },
-    {
-      id: 'milestone-4',
-      title: 'Final Testing',
-      description: 'Test brake system and road test',
-      status: 'pending',
-      estimatedDuration: 45,
-    },
-  ],
-
-  notes: [
-    {
-      id: 'note-1',
-      content: 'Customer mentioned grinding noise started 2 weeks ago',
-      type: 'customer',
-      author: 'Sarah Johnson',
-      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      isImportant: true,
-    },
-    {
-      id: 'note-2',
-      content: 'Front rotors are within spec, no replacement needed',
-      type: 'technical',
-      author: 'Mike Johnson',
-      createdAt: new Date(Date.now() - 90 * 60 * 1000),
-      isImportant: false,
-    },
-  ],
-
-  attachments: [
-    {
-      id: 'att-1',
-      name: 'brake-inspection-photos.jpg',
-      type: 'image',
-      url: '/attachments/brake-inspection.jpg',
-      size: 2048576, // 2MB
-      uploadedBy: 'Mike Johnson',
-      uploadedAt: new Date(Date.now() - 90 * 60 * 1000),
-    },
-  ],
-
-  createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-  updatedAt: new Date(Date.now() - 30 * 60 * 1000),
-  createdBy: 'Sarah Johnson',
+const STATUS_LABELS: Record<JobStatus, { label: string; className: string }> = {
+  intake: { label: 'Intake', className: 'bg-slate-100 text-slate-800' },
+  'incoming-call': { label: 'Incoming Call', className: 'bg-teal-100 text-teal-800' },
+  scheduled: { label: 'Scheduled', className: 'bg-blue-100 text-blue-800' },
+  'in-progress': { label: 'In Progress', className: 'bg-indigo-100 text-indigo-800' },
+  'waiting-parts': { label: 'Waiting on Parts', className: 'bg-amber-100 text-amber-800' },
+  completed: { label: 'Completed', className: 'bg-emerald-100 text-emerald-800' },
 };
 
-const STATUS_CONFIGS = {
-  pending: { label: 'Pending', color: 'bg-gray-100 text-gray-800', icon: Clock },
-  'in-progress': { label: 'In Progress', color: 'bg-blue-100 text-blue-800', icon: Activity },
-  paused: { label: 'Paused', color: 'bg-yellow-100 text-yellow-800', icon: Pause },
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: X },
+const PRIORITY_LABELS: Record<JobPriority, { label: string; className: string }> = {
+  low: { label: 'Low', className: 'bg-green-100 text-green-800' },
+  medium: { label: 'Medium', className: 'bg-yellow-100 text-yellow-800' },
+  high: { label: 'High', className: 'bg-red-100 text-red-800' },
 };
 
-const PRIORITY_CONFIGS = {
-  low: { label: 'Low', color: 'bg-green-100 text-green-800' },
-  medium: { label: 'Medium', color: 'bg-yellow-100 text-yellow-800' },
-  high: { label: 'High', color: 'bg-orange-100 text-orange-800' },
-  urgent: { label: 'Urgent', color: 'bg-red-100 text-red-800' },
-};
+const NOTE_TYPES: Array<{ value: NonNullable<JobNote['type']>; label: string }> = [
+  { value: 'general', label: 'General' },
+  { value: 'technical', label: 'Technical' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'internal', label: 'Internal' },
+];
 
-const NOTE_TYPE_CONFIGS = {
-  general: { label: 'General', color: 'bg-gray-100 text-gray-800', icon: FileText },
-  technical: { label: 'Technical', color: 'bg-blue-100 text-blue-800', icon: Settings },
-  customer: { label: 'Customer', color: 'bg-green-100 text-green-800', icon: User },
-  internal: { label: 'Internal', color: 'bg-purple-100 text-purple-800', icon: Flag },
-};
+const INVOICE_PATTERN = /^[A-Za-z0-9\-\/]{1,20}$/;
 
 export function JobDetailsView({
   jobId,
-  onJobUpdate,
+  job,
+  isLoading = false,
+  error = null,
+  onRetry,
   onJobAction,
-  className = '',
+  onAddNote,
+  onInvoiceChange,
+  onRefresh,
 }: JobDetailsViewProps) {
-  const [job, setJob] = useState<JobDetails>(mockJob);
-  const [isEditing, setIsEditing] = useState(false);
-  const [showNoteDialog, setShowNoteDialog] = useState(false);
-  const [newNote, setNewNote] = useState({ content: '', type: 'general' as const, isImportant: false });
-  const [invoiceValue, setInvoiceValue] = useState(job.invoiceNumber ?? '');
+  const [noteContent, setNoteContent] = useState('');
+  const [noteType, setNoteType] = useState<NonNullable<JobNote['type']>>('general');
+  const [noteIsImportant, setNoteIsImportant] = useState(false);
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+  const [invoiceValue, setInvoiceValue] = useState('');
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const hasJob = Boolean(job);
 
-  const { addToast } = useUIStore();
+  useEffect(() => {
+    setInvoiceValue(job?.invoiceNumber ?? '');
+    setInvoiceError(null);
+  }, [job?.invoiceNumber]);
 
-  React.useEffect(() => {
-    setInvoiceValue(job.invoiceNumber ?? '');
-  }, [job.invoiceNumber]);
+  const estimatedDurationMinutes = useMemo(() => {
+    if (!job) return null;
+    if (typeof job.estimatedDurationMinutes === 'number') {
+      return job.estimatedDurationMinutes;
+    }
+    if (typeof job.estHours === 'number') {
+      return Math.round(job.estHours * 60);
+    }
+    return null;
+  }, [job]);
 
-  const invoicePattern = /^[A-Za-z0-9\-\/]{1,20}$/;
+  const milestoneProgress = useMemo(() => {
+    if (!job?.milestones?.length) {
+      return { completed: 0, total: 0, value: 0 };
+    }
+    const total = job.milestones.length;
+    const completed = job.milestones.filter((milestone) => milestone.status === 'completed').length;
+    const value = Math.round((completed / total) * 100);
+    return { completed, total, value };
+  }, [job?.milestones]);
 
-  const validateAndSaveInvoice = (rawValue: string) => {
-    const trimmed = rawValue.trim();
+  const handleJobAction = useCallback(
+    (action: JobPanelAction) => {
+      onJobAction?.(action, jobId);
+    },
+    [jobId, onJobAction],
+  );
 
-    if (trimmed === '') {
-      setInvoiceError(null);
-      setJob((prev) => ({ ...prev, invoiceNumber: undefined }));
+  const handleNoteSubmit = useCallback(async () => {
+    if (!noteContent.trim() || !onAddNote) {
       return;
     }
 
-    if (!invoicePattern.test(trimmed)) {
+    setIsSubmittingNote(true);
+    try {
+      await onAddNote(
+        {
+          content: noteContent.trim(),
+          type: noteType,
+          isImportant: noteIsImportant,
+        },
+        jobId,
+      );
+      setNoteContent('');
+      setNoteIsImportant(false);
+      setNoteType('general');
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  }, [noteContent, noteType, noteIsImportant, onAddNote, jobId]);
+
+  const handleInvoiceBlur = useCallback(() => {
+    const trimmed = invoiceValue.trim();
+
+    if (!trimmed) {
+      setInvoiceError(null);
+      if (onInvoiceChange) {
+        onInvoiceChange(null, jobId);
+      }
+      return;
+    }
+
+    if (!INVOICE_PATTERN.test(trimmed)) {
       setInvoiceError('Use 1-20 characters: letters, numbers, dash, or slash.');
       return;
     }
 
     setInvoiceError(null);
-    setJob((prev) => ({ ...prev, invoiceNumber: trimmed }));
-  };
-
-  const handleInvoiceBlur = () => {
-    validateAndSaveInvoice(invoiceValue);
-  };
-
-  // Calculate progress
-  const completedMilestones = job.milestones.filter(m => m.status === 'completed').length;
-  const totalMilestones = job.milestones.length;
-  const calculatedProgress = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
-
-  // Calculate time remaining
-  const timeElapsed = job.startDate ? Date.now() - job.startDate.getTime() : 0;
-  const timeRemaining = job.estimatedDuration * 60 * 1000 - timeElapsed;
-
-  const handleJobAction = useCallback((action: string) => {
-    onJobAction?.(action, job.id);
-    
-    // Update local state based on action
-    switch (action) {
-      case 'start':
-        setJob(prev => ({
-          ...prev,
-          status: 'in-progress',
-          startDate: new Date(),
-          updatedAt: new Date(),
-        }));
-        break;
-      case 'pause':
-        setJob(prev => ({
-          ...prev,
-          status: 'paused',
-          updatedAt: new Date(),
-        }));
-        break;
-      case 'complete':
-        setJob(prev => ({
-          ...prev,
-          status: 'completed',
-          completedDate: new Date(),
-          progressPercentage: 100,
-          updatedAt: new Date(),
-        }));
-        break;
+    if (onInvoiceChange) {
+      onInvoiceChange(trimmed, jobId);
     }
+  }, [invoiceValue, onInvoiceChange, jobId]);
 
-    addToast({
-      type: 'success',
-      title: 'Job Updated',
-      message: `Job ${job.jobNumber} has been ${action}ed`,
-      duration: 3000,
-    });
-  }, [job.id, job.jobNumber, onJobAction, addToast]);
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="space-y-2">
+          <SkeletonLine className="h-6 w-40" />
+          <SkeletonLine className="h-4 w-64" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SkeletonLine className="h-4 w-full" />
+          <SkeletonLine className="h-4 w-3/4" />
+          <SkeletonLine className="h-4 w-2/3" />
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const handleAddNote = useCallback(() => {
-    if (!newNote.content.trim()) return;
+  if (error) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" /> Job details unavailable
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+          </div>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+        </CardHeader>
+      </Card>
+    );
+  }
 
-    const note: JobNote = {
-      id: `note-${Date.now()}`,
-      content: newNote.content,
-      type: newNote.type,
-      author: 'Current User',
-      createdAt: new Date(),
-      isImportant: newNote.isImportant,
-    };
-
-    setJob(prev => ({
-      ...prev,
-      notes: [note, ...prev.notes],
-      updatedAt: new Date(),
-    }));
-
-    setNewNote({ content: '', type: 'general', isImportant: false });
-    setShowNoteDialog(false);
-
-    addToast({
-      type: 'success',
-      title: 'Note Added',
-      message: 'Job note has been added successfully',
-      duration: 3000,
-    });
-  }, [newNote, addToast]);
-
-  const handleMilestoneComplete = useCallback((milestoneId: string) => {
-    setJob(prev => ({
-      ...prev,
-      milestones: prev.milestones.map(milestone =>
-        milestone.id === milestoneId
-          ? {
-              ...milestone,
-              status: 'completed' as const,
-              completedAt: new Date(),
-              completedBy: 'Current User',
-              actualDuration: milestone.estimatedDuration, // Mock actual duration
-            }
-          : milestone
-      ),
-      progressPercentage: Math.min(100, prev.progressPercentage + 25), // Increase progress
-      updatedAt: new Date(),
-    }));
-
-    addToast({
-      type: 'success',
-      title: 'Milestone Completed',
-      message: 'Job milestone has been marked as completed',
-      duration: 3000,
-    });
-  }, [addToast]);
-
-  const statusConfig = STATUS_CONFIGS[job.status];
-  const priorityConfig = PRIORITY_CONFIGS[job.priority];
-  const StatusIcon = statusConfig.icon;
-
-  return (
-    <div className={cn('space-y-6', className)}>
-      {/* Job Header */}
+  if (!hasJob) {
+    return (
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Wrench className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">{job.title}</h2>
-                  <p className="text-sm text-muted-foreground">{job.jobNumber}</p>
-                </div>
+          <CardTitle className="flex items-center gap-2 text-muted-foreground">
+            <FileText className="h-5 w-5" /> Select a job to see details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>This panel will populate as soon as you select a job elsewhere in the app.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const statusMeta = STATUS_LABELS[job.status];
+  const priorityMeta = PRIORITY_LABELS[job.priority];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-md bg-blue-100 p-2 text-blue-700">
+                <Wrench className="h-5 w-5" />
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={statusConfig.color}>
-                  <StatusIcon className="h-3 w-3 mr-1" />
-                  {statusConfig.label}
-                </Badge>
-                <Badge variant="outline" className={priorityConfig.color}>
-                  {priorityConfig.label} Priority
-                </Badge>
-                <Badge variant="outline">
-                  {job.category}
-                </Badge>
+              <div>
+                <CardTitle>{job.title}</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {job.jobNumber ?? `Job ${job.id}`}
+                </p>
               </div>
             </div>
-
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant="outline" className={statusMeta.className}>
+                {statusMeta.label}
+              </Badge>
+              <Badge variant="outline" className={priorityMeta.className}>
+                {priorityMeta.label} Priority
+              </Badge>
+              {estimatedDurationMinutes ? (
+                <Badge variant="outline" className="bg-slate-100 text-slate-700">
+                  {estimatedDurationMinutes} min est.
+                </Badge>
+              ) : null}
+            </div>
+            {job.description && (
+              <p className="text-sm text-muted-foreground">{job.description}</p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-              {job.status === 'pending' && (
+              {job.status !== 'completed' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRefresh?.()}
+                  disabled={!onRefresh}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {job.status === 'scheduled' && (
                 <Button size="sm" onClick={() => handleJobAction('start')}>
-                  <Play className="h-4 w-4 mr-2" />
-                  Start Job
+                  <Play className="mr-2 h-4 w-4" /> Start Job
                 </Button>
               )}
               {job.status === 'in-progress' && (
                 <>
                   <Button variant="outline" size="sm" onClick={() => handleJobAction('pause')}>
-                    <Pause className="h-4 w-4 mr-2" />
-                    Pause
+                    <Pause className="mr-2 h-4 w-4" /> Pause
                   </Button>
                   <Button size="sm" onClick={() => handleJobAction('complete')}>
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Complete
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Completed
                   </Button>
                 </>
               )}
-              {job.status === 'paused' && (
+              {job.status === 'waiting-parts' && (
                 <Button size="sm" onClick={() => handleJobAction('start')}>
-                  <Play className="h-4 w-4 mr-2" />
-                  Resume
+                  <Play className="mr-2 h-4 w-4" /> Resume
                 </Button>
               )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Job Actions</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit Job
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowNoteDialog(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Note
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Camera className="mr-2 h-4 w-4" />
-                    Take Photo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Paperclip className="mr-2 h-4 w-4" />
-                    Attach File
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </CardHeader>
-      </Card>
-
-      {/* Progress Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Progress Overview
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">{calculatedProgress}%</span>
-            </div>
-            <Progress value={calculatedProgress} className="h-2" />
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span>{completedMilestones} of {totalMilestones} milestones</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-blue-600" />
-                <span>
-                  {timeRemaining > 0 
-                    ? `${Math.round(timeRemaining / (60 * 1000))} min remaining`
-                    : 'Overdue'
-                  }
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-600" />
-                <span>${job.actualCost || job.estimatedCost}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-purple-600" />
-                <span>{job.assignedTechnician?.name || 'Unassigned'}</span>
-              </div>
-            </div>
-          </div>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <DetailItem
+            label="Created"
+            value={formatDateTime(job.createdAt)}
+            icon={Clock}
+          />
+          <DetailItem
+            label="Last Updated"
+            value={formatDateTime(job.updatedAt)}
+            icon={Clock}
+          />
+          {job.appointment && (
+            <DetailItem
+              label="Appointment"
+              value={`${formatDateTime(job.appointment.startAt)} → ${formatDateTime(job.appointment.endAt)}`}
+              icon={Calendar}
+            />
+          )}
         </CardContent>
       </Card>
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="details" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="notes">Notes ({job.notes.length})</TabsTrigger>
-          <TabsTrigger value="attachments">Files ({job.attachments.length})</TabsTrigger>
-        </TabsList>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" /> Customer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <DetailLine label="Name" value={job.customer?.name ?? '—'} />
+            <DetailLine label="Phone" value={job.customer?.phone ?? '—'} />
+            <DetailLine label="Email" value={job.customer?.email ?? '—'} />
+            <DetailLine label="Address" value={job.customer?.address ?? '—'} />
+            <DetailLine label="Preferred Contact" value={job.customer?.preferredContact ?? '—'} />
+          </CardContent>
+        </Card>
 
-        <TabsContent value="details" className="space-y-4">
-          <div className="grid gap-4">
-            {/* Customer & Vehicle Info */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Customer
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <div className="font-semibold">{job.customer.name}</div>
-                    <div className="text-sm text-muted-foreground">{job.customer.phone}</div>
-                    <div className="text-sm text-muted-foreground">{job.customer.email}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Phone className="h-3 w-3 mr-1" />
-                      Call
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Mail className="h-3 w-3 mr-1" />
-                      Email
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" /> Vehicle
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <DetailLine
+              label="Vehicle"
+              value={
+                job.vehicle
+                  ? [job.vehicle.year, job.vehicle.make, job.vehicle.model]
+                      .filter(Boolean)
+                      .map((part) => String(part))
+                      .join(' ')
+                      .trim() || '—'
+                  : '—'
+              }
+            />
+            <DetailLine label="VIN" value={job.vehicle?.vin ?? '—'} />
+            <DetailLine label="License" value={job.vehicle?.licensePlate ?? '—'} />
+            <DetailLine label="Mileage" value={job.vehicle?.mileage ? `${job.vehicle.mileage} mi` : '—'} />
+            <DetailLine label="Color" value={job.vehicle?.color ?? '—'} />
+          </CardContent>
+        </Card>
+      </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Car className="h-4 w-4" />
-                    Vehicle
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <div className="font-semibold">
-                      {job.vehicle.year} {job.vehicle.make} {job.vehicle.model}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {job.vehicle.license} • {job.vehicle.mileage.toLocaleString()} miles
-                    </div>
-                    <div className="text-sm text-muted-foreground font-mono">
-                      {job.vehicle.vin}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Job Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Job Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium">Description</Label>
-                    <p className="text-sm mt-1">{job.description}</p>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <Label className="text-sm font-medium">Scheduled Date</Label>
-                      <div className="text-sm mt-1">
-                        {job.scheduledDate ? format(job.scheduledDate, 'MMM d, yyyy h:mm a') : 'Not scheduled'}
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Estimated Duration</Label>
-                      <div className="text-sm mt-1">{job.estimatedDuration} minutes</div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Bay Assignment</Label>
-                      <div className="text-sm mt-1">{job.bay?.name || 'Not assigned'}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">Estimated Cost</Label>
-                    <div className="text-sm mt-1 font-semibold">${job.estimatedCost}</div>
-                  </div>
-                    <div>
-                      <Label className="text-sm font-medium">Labor Cost</Label>
-                      <div className="text-sm mt-1">${job.laborCost || 0}</div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Parts Cost</Label>
-                      <div className="text-sm mt-1">${job.partsCost || 0}</div>
-                    </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="job-invoice-number" className="text-sm font-medium">
-                      Invoice # (optional)
-                    </Label>
-                    <Input
-                      id="job-invoice-number"
-                      value={invoiceValue}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setInvoiceValue(value);
-                        if (value.trim() === '' || invoicePattern.test(value.trim())) {
-                          setInvoiceError(null);
-                        }
-                      }}
-                      onBlur={handleInvoiceBlur}
-                      placeholder="e.g. INV-1042"
-                      maxLength={20}
-                      className="max-w-xs font-mono"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Optional. Paste the number from your invoicing program.
-                    </p>
-                    {invoiceError && (
-                      <p className="text-xs text-destructive">{invoiceError}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        </TabsContent>
-
-        <TabsContent value="timeline" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Job Milestones</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {job.milestones.map((milestone, index) => {
-                  const isCompleted = milestone.status === 'completed';
-                  const isInProgress = milestone.status === 'in-progress';
-                  const isPending = milestone.status === 'pending';
-
-                  return (
-                    <div key={milestone.id} className="flex items-start gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className={cn(
-                          'w-8 h-8 rounded-full flex items-center justify-center',
-                          isCompleted && 'bg-green-100',
-                          isInProgress && 'bg-blue-100',
-                          isPending && 'bg-gray-100'
-                        )}>
-                          {isCompleted && <CheckCircle className="h-4 w-4 text-green-600" />}
-                          {isInProgress && <Activity className="h-4 w-4 text-blue-600" />}
-                          {isPending && <Clock className="h-4 w-4 text-gray-600" />}
-                        </div>
-                        {index < job.milestones.length - 1 && (
-                          <div className={cn(
-                            'w-0.5 h-12 mt-2',
-                            isCompleted ? 'bg-green-200' : 'bg-gray-200'
-                          )} />
-                        )}
-                      </div>
-
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium">{milestone.title}</h4>
-                          {isPending && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleMilestoneComplete(milestone.id)}
-                            >
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Complete
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{milestone.description}</p>
-                        
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>Est: {milestone.estimatedDuration} min</span>
-                          {milestone.actualDuration && (
-                            <span>Actual: {milestone.actualDuration} min</span>
-                          )}
-                          {milestone.completedAt && (
-                            <span>Completed: {formatDistanceToNow(milestone.completedAt, { addSuffix: true })}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="notes" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Job Notes</h3>
-            <Button onClick={() => setShowNoteDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Note
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {job.notes.map((note) => {
-              const noteConfig = NOTE_TYPE_CONFIGS[note.type];
-              const NoteIcon = noteConfig.icon;
-
-              return (
-                <Card key={note.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={cn('p-2 rounded-lg', noteConfig.color)}>
-                        <NoteIcon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className={noteConfig.color}>
-                            {noteConfig.label}
-                          </Badge>
-                          {note.isImportant && (
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                              <Star className="h-3 w-3 mr-1" />
-                              Important
-                            </Badge>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            by {note.author} • {formatDistanceToNow(note.createdAt, { addSuffix: true })}
-                          </span>
-                        </div>
-                        <p className="text-sm">{note.content}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {job.notes.length === 0 && (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Notes Yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Add notes to keep track of important information about this job.
-                  </p>
-                  <Button onClick={() => setShowNoteDialog(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Note
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="attachments" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Attachments</h3>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <Camera className="h-4 w-4 mr-2" />
-                Take Photo
-              </Button>
-              <Button variant="outline" size="sm">
-                <Paperclip className="h-4 w-4 mr-2" />
-                Attach File
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {job.attachments.map((attachment) => (
-              <Card key={attachment.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      {attachment.type === 'image' && <Camera className="h-4 w-4 text-blue-600" />}
-                      {attachment.type === 'document' && <FileText className="h-4 w-4 text-blue-600" />}
-                      {attachment.type === 'video' && <Activity className="h-4 w-4 text-blue-600" />}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{attachment.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {(attachment.size / 1024 / 1024).toFixed(1)} MB • 
-                        {formatDistanceToNow(attachment.uploadedAt, { addSuffix: true })}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+      {job.milestones?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Progress value={milestoneProgress.value} className="h-2 w-24" />
+              Milestones ({milestoneProgress.completed}/{milestoneProgress.total})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {job.milestones.map((milestone) => (
+              <MilestoneItem key={milestone.id} milestone={milestone} />
             ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
-            {job.attachments.length === 0 && (
-              <Card className="md:col-span-2">
-                <CardContent className="p-8 text-center">
-                  <Paperclip className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Attachments</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Add photos, documents, or other files related to this job.
-                  </p>
-                  <div className="flex gap-2 justify-center">
-                    <Button variant="outline">
-                      <Camera className="h-4 w-4 mr-2" />
-                      Take Photo
-                    </Button>
-                    <Button variant="outline">
-                      <Paperclip className="h-4 w-4 mr-2" />
-                      Attach File
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Add Note Dialog */}
-      <Dialog open={showNoteDialog} onOpenChange={setShowNoteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Job Note</DialogTitle>
-            <DialogDescription>
-              Add a note to keep track of important information about this job.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="note-type">Note Type</Label>
-              <Select
-                value={newNote.type}
-                onValueChange={(value) => setNewNote(prev => ({ ...prev, type: value as any }))}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" /> Notes
+          </CardTitle>
+          {job.noteEntries?.length ? (
+            <span className="text-xs text-muted-foreground">
+              {job.noteEntries.length} note{job.noteEntries.length === 1 ? '' : 's'}
+            </span>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <Label htmlFor="job-note-content" className="text-sm font-medium">
+              Add a note
+            </Label>
+            <Textarea
+              id="job-note-content"
+              placeholder="Share updates, internal notes, or customer feedback."
+              value={noteContent}
+              onChange={(event) => setNoteContent(event.target.value)}
+              rows={3}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="job-note-type" className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Type
+                </Label>
+                <Select value={noteType} onValueChange={(value) => setNoteType(value as typeof noteType)}>
+                  <SelectTrigger id="job-note-type" className="h-8 w-32 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NOTE_TYPES.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="job-note-important"
+                  checked={noteIsImportant}
+                  onCheckedChange={(value) => setNoteIsImportant(Boolean(value))}
+                />
+                <Label htmlFor="job-note-important" className="text-xs text-muted-foreground">
+                  Mark as important
+                </Label>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleNoteSubmit}
+                disabled={!noteContent.trim() || isSubmittingNote || !onAddNote}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(NOTE_TYPE_CONFIGS).map(([key, config]) => (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <config.icon className="h-4 w-4" />
-                        {config.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="note-content">Note Content</Label>
-              <Textarea
-                id="note-content"
-                value={newNote.content}
-                onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
-                placeholder="Enter your note here..."
-                rows={4}
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="important"
-                checked={newNote.isImportant}
-                onChange={(e) => setNewNote(prev => ({ ...prev, isImportant: e.target.checked }))}
-                className="rounded"
-              />
-              <Label htmlFor="important" className="text-sm">
-                Mark as important
-              </Label>
+                {isSubmittingNote ? 'Saving…' : 'Save Note'}
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNoteDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddNote} disabled={!newNote.content.trim()}>
-              Add Note
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+          <Separator />
+
+          {job.noteEntries?.length ? (
+            <div className="space-y-4">
+              {job.noteEntries.map((note) => (
+                <NoteItem key={note.id} note={note} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No notes recorded yet." />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" /> Billing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailLine
+              label="Estimated Hours"
+              value={
+                typeof job.estHours === 'number'
+                  ? `${job.estHours.toFixed(1)} hrs`
+                  : '—'
+              }
+            />
+            <div className="space-y-1">
+              <Label htmlFor="job-invoice" className="text-xs uppercase tracking-wide text-muted-foreground">
+                Invoice number
+              </Label>
+              <Input
+                id="job-invoice"
+                value={invoiceValue}
+                onChange={(event) => setInvoiceValue(event.target.value)}
+                onBlur={handleInvoiceBlur}
+                placeholder="Optional"
+                maxLength={20}
+                disabled={!onInvoiceChange}
+                className="max-w-xs font-mono"
+              />
+              {invoiceError ? <p className="text-xs text-destructive">{invoiceError}</p> : null}
+            </div>
+          </div>
+          {job.attachments?.length ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Attachments</p>
+              <div className="space-y-2">
+                {job.attachments.map((attachment) => (
+                  <AttachmentItem key={attachment.id} attachment={attachment} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return format(date, 'MMM d, yyyy • h:mm a');
+}
+
+function SkeletonLine({ className }: { className?: string }) {
+  return <div className={cn('animate-pulse rounded bg-muted', className)} />;
+}
+
+function DetailItem({ label, value, icon: Icon }: { label: string; value?: string | null; icon?: React.ElementType }) {
+  return (
+    <div className="flex items-start gap-3">
+      {Icon ? (
+        <div className="rounded-md bg-slate-100 p-1 text-slate-600">
+          <Icon className="h-4 w-4" />
+        </div>
+      ) : null}
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-sm text-foreground">{value || '—'}</p>
+      </div>
+    </div>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function MilestoneItem({ milestone }: { milestone: JobMilestone }) {
+  const statusBadge = getMilestoneBadge(milestone.status);
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium text-sm text-foreground">{milestone.title}</p>
+        <Badge variant="outline" className={statusBadge.className}>
+          {statusBadge.label}
+        </Badge>
+      </div>
+      {milestone.description ? (
+        <p className="mt-1 text-sm text-muted-foreground">{milestone.description}</p>
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        {milestone.completedAt ? (
+          <span>Completed {formatDistanceToNow(new Date(milestone.completedAt), { addSuffix: true })}</span>
+        ) : null}
+        {milestone.dueAt ? (
+          <span>Due {formatDateTime(milestone.dueAt)}</span>
+        ) : null}
+        {milestone.assignedTo ? <span>Assigned to {milestone.assignedTo}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function getMilestoneBadge(status: JobMilestone['status']) {
+  switch (status) {
+    case 'completed':
+      return { label: 'Completed', className: 'bg-emerald-100 text-emerald-700' };
+    case 'in-progress':
+      return { label: 'In Progress', className: 'bg-indigo-100 text-indigo-700' };
+    default:
+      return { label: 'Pending', className: 'bg-slate-100 text-slate-700' };
+  }
+}
+
+function NoteItem({ note }: { note: JobNote }) {
+  const typeLabel = NOTE_TYPES.find((item) => item.value === note.type)?.label ?? 'General';
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-slate-100 text-slate-700">
+            {typeLabel}
+          </Badge>
+          {note.isImportant ? (
+            <Badge variant="outline" className="bg-amber-100 text-amber-800">
+              Must Read
+            </Badge>
+          ) : null}
+        </div>
+        <span>{formatDateTime(note.createdAt)}</span>
+      </div>
+      <p className="mt-2 text-sm text-foreground">{note.content}</p>
+      <p className="mt-2 text-xs text-muted-foreground">— {note.author}</p>
+    </div>
+  );
+}
+
+function AttachmentItem({ attachment }: { attachment: JobAttachment }) {
+  return (
+    <a
+      href={attachment.url}
+      className="flex items-center justify-between rounded border p-2 text-sm hover:bg-muted"
+      target="_blank"
+      rel="noreferrer"
+    >
+      <span>{attachment.label}</span>
+      <Badge variant="outline" className="bg-slate-100 text-slate-700">
+        {attachment.type === 'document' ? 'Document' : 'Link'}
+      </Badge>
+    </a>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return <p className="text-sm text-muted-foreground">{message}</p>;
 }
