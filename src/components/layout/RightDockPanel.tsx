@@ -17,11 +17,13 @@ import {
   Mail,
   MessageSquare,
   Wrench,
+  LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSelectionStore } from '@/stores/selection-store';
 import type { DockPayload, SelectionItem, SelectionType } from '@/stores/selection-store';
 import { JobDetailsView } from '@/components/dock/JobDetailsView';
+import type { JobNotePayload } from '@/components/dock/JobDetailsView';
 import { VehicleDetailsView } from '@/components/dock/VehicleDetailsView';
 import { CustomerDetailsView } from '@/components/dock/CustomerDetailsView';
 import { CallDetailsView } from '@/components/dock/CallDetailsView';
@@ -32,6 +34,7 @@ import {
   useCustomer,
   useCall,
   useAppointment,
+  useUpdateJob,
   usePrefetchJob,
   usePrefetchVehicle,
   usePrefetchCustomer,
@@ -43,6 +46,7 @@ import type {
   Call,
   CustomerWithVehicles,
   JobWithRelations,
+  JobNote,
   VehicleWithHistory,
 } from '@/types';
 
@@ -423,8 +427,9 @@ export function RightDockPanel({ className = '' }: RightDockPanelProps) {
               size="sm"
               onClick={handleMenuClick}
               className="h-8 px-3"
-              title="Back to menu"
+              title="Open dock menu"
             >
+              <LayoutGrid className="mr-2 h-4 w-4" aria-hidden="true" />
               Menu
             </Button>
 
@@ -663,6 +668,38 @@ function JobDetailsContent({
   state: ContextViewState<JobWithRelations>;
 }) {
   const jobId = payload?.entityId ?? state.data?.id ?? 'job-unknown';
+  const { mutateAsync: updateJobMutation } = useUpdateJob();
+
+  const handleAddNote = useCallback(
+    async (notePayload: JobNotePayload, id: string) => {
+      if (!state.data) {
+        return;
+      }
+
+      const existingNotes = state.data.noteEntries ?? [];
+      const tempId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `temp-note-${Date.now()}`;
+
+      const optimisticNote: JobNote = {
+        id: tempId,
+        author: 'Shop Team',
+        content: notePayload.content,
+        createdAt: new Date().toISOString(),
+        type: notePayload.type ?? 'general',
+        isImportant: notePayload.isImportant ?? false,
+      };
+
+      await updateJobMutation({
+        id,
+        data: {
+          noteEntries: [optimisticNote, ...existingNotes],
+        },
+      });
+    },
+    [state.data, updateJobMutation],
+  );
   return (
     <JobDetailsView
       jobId={jobId}
@@ -672,7 +709,7 @@ function JobDetailsContent({
       onRetry={state.onRetry}
       onRefresh={state.onRefresh}
       onJobAction={(action, id) => console.log('Job action:', action, id)}
-      onAddNote={(note, id) => console.log('Job note submitted:', note, id)}
+      onAddNote={state.data ? handleAddNote : undefined}
       onInvoiceChange={(invoice, id) => console.log('Invoice updated:', invoice, id)}
     />
   );
@@ -779,4 +816,5 @@ function getQueryErrorMessage(responseError?: string, error?: unknown): string |
 }
 
 export default RightDockPanel;
+
 

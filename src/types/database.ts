@@ -131,7 +131,9 @@ export type CreateVehicleData = Omit<Vehicle, 'id' | 'createdAt' | 'updatedAt'>;
 export type UpdateVehicleData = Partial<CreateVehicleData>;
 
 export type CreateJobData = Omit<Job, 'id' | 'createdAt' | 'updatedAt'>;
-export type UpdateJobData = Partial<CreateJobData>;
+export type UpdateJobData = Partial<CreateJobData> & {
+  noteEntries?: JobNote[];
+};
 
 export type CreateAppointmentData = Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>;
 export type UpdateAppointmentData = Partial<CreateAppointmentData>;
@@ -371,4 +373,3 @@ export interface ExportOptions {
   includeFields: string[];
   filters?: JobFilters | CustomerFilters | CallFilters;
 }
-

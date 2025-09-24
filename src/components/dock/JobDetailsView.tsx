@@ -146,6 +146,8 @@ export function JobDetailsView({
       setNoteContent('');
       setNoteIsImportant(false);
       setNoteType('general');
+    } catch (error) {
+      /* Mutation hook surfaces errors to the user */
     } finally {
       setIsSubmittingNote(false);
     }
