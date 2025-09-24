@@ -55,7 +55,7 @@ export interface SchedulingCalendarHandle {
   getCurrentView: () => string;
   getCurrentDate: () => Date;
   getEvents: () => CalendarEventSnapshot[];
-  printSchedule: (options?: { scope?: PrintScope; anchorDate?: Date }) => void;
+  printSchedule: (options?: { viewName?: string; date?: Date; scope?: PrintScope; title?: string }) => void;
 }
 
 type MutableEventApi = EventApi & {
@@ -84,6 +84,31 @@ interface ConflictModalState {
   pendingReceiveInfo?: EventReceiveArg;
 }
 
+const VIEW_SCOPE_MAP: Record<string, PrintScope> = {
+  resourceTimeGridDay: 'day',
+  timeGridDay: 'day',
+  dayGridDay: 'day',
+  resourceTimeGridWeek: 'week',
+  timeGridWeek: 'week',
+  dayGridWeek: 'week',
+  dayGridMonth: 'month',
+  timeGridMonth: 'month',
+};
+
+function inferScopeFromView(viewName: string): PrintScope {
+  if (VIEW_SCOPE_MAP[viewName]) {
+    return VIEW_SCOPE_MAP[viewName];
+  }
+
+  const normalized = viewName.toLowerCase();
+  if (normalized.includes('month')) {
+    return 'month';
+  }
+  if (normalized.includes('week')) {
+    return 'week';
+  }
+  return 'day';
+}
 export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, SchedulingCalendarProps>(function SchedulingCalendar(
   {
     onEventClick,
@@ -706,24 +731,27 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
       .filter((event): event is CalendarEventSnapshot => event !== null);
   }, [getCalendarApi]);
 
-  const printSchedule = useCallback((options: { scope?: PrintScope; anchorDate?: Date } = {}) => {
-    const events = getEventSnapshots();
-    const inferredScope: PrintScope =
-      options.scope ??
-      (currentView === 'resourceTimeGridDay'
-        ? 'day'
-        : currentView === 'resourceTimeGridWeek'
-        ? 'week'
-        : 'month');
-    const anchorDate = options.anchorDate ? new Date(options.anchorDate) : new Date(currentDate);
+  const printSchedule = useCallback(
+    (options: { viewName?: string; date?: Date; scope?: PrintScope; title?: string } = {}) => {
+      const api = getCalendarApi();
+      const anchorBase = options.date ?? api?.getDate() ?? currentDate;
+      const viewName = options.viewName ?? api?.view?.type ?? currentView;
+      const scope = options.scope ?? inferScopeFromView(viewName);
+      const events = getEventSnapshots();
+      const defaultTitle =
+        typeof document !== 'undefined' && typeof document.title === 'string' && document.title.trim().length > 0
+          ? document.title
+          : 'Mechanic Call App';
 
-    openPrintableSchedule({
-      scope: inferredScope,
-      anchorDate,
-      events,
-      title: 'Mechanic Call App',
-    });
-  }, [getEventSnapshots, currentView, currentDate]);
+      openPrintableSchedule({
+        scope,
+        anchorDate: new Date(anchorBase),
+        events,
+        title: options.title ?? defaultTitle,
+      });
+    },
+    [currentDate, currentView, getCalendarApi, getEventSnapshots]
+  );
 
   useImperativeHandle(
     ref,
@@ -959,13 +987,3 @@ export function CalendarLegend() {
 
 // Export calendar utilities for external use
 export type { SchedulingCalendarProps, SchedulingCalendarHandle, CalendarEventSnapshot };
-
-
-
-
-
-
-
-
-
-

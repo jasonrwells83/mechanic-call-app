@@ -235,7 +235,13 @@ export function CalendarPage() {
       return;
     }
 
-    calendar.printSchedule({ scope });
+    const anchorDate = calendar.getCurrentDate();
+
+    calendar.printSchedule({
+      scope,
+      date: anchorDate,
+      title: 'Mechanic Call App - Schedule',
+    });
 
   };
 
