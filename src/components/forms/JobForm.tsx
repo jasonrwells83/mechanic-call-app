@@ -318,8 +318,8 @@ export function JobForm({
     setIsSubmitting(true);
 
     try {
-      let finalCustomerId = data.customerId;
-      let finalVehicleId = data.vehicleId;
+      let finalCustomerId = data.customerId || undefined;
+      let finalVehicleId = data.vehicleId || undefined;
       const normalizedInvoiceInput = data.invoiceNumber?.trim() ?? '';
       const invoiceNumberForPayload = normalizedInvoiceInput === '' ? undefined : normalizedInvoiceInput;
 
@@ -353,8 +353,14 @@ export function JobForm({
             address: data.customerAddress || undefined,
           };
 
-          const newCustomer = await createCustomer(customerData);
-          finalCustomerId = newCustomer.id;
+          const customerResponse = await createCustomer(customerData);
+          const createdCustomerId = customerResponse.data?.id;
+
+          if (!createdCustomerId) {
+            throw new Error('Failed to create customer record. Please try again.');
+          }
+
+          finalCustomerId = createdCustomerId;
         }
 
         // Create new vehicle if needed
@@ -370,14 +376,24 @@ export function JobForm({
             vin: data.vehicleVin || undefined,
           };
 
-          const newVehicle = await createVehicle(vehicleData);
-          finalVehicleId = newVehicle.id;
+          const vehicleResponse = await createVehicle(vehicleData);
+          const createdVehicleId = vehicleResponse.data?.id;
+
+          if (!createdVehicleId) {
+            throw new Error('Failed to create vehicle record. Please try again.');
+          }
+
+          finalVehicleId = createdVehicleId;
         }
 
         // Create new job
+        if (!finalCustomerId) {
+          throw new Error('Customer information is required to create a job.');
+        }
+
         const createData: CreateJobData = {
           title: data.title,
-          customerId: finalCustomerId || '',
+          customerId: finalCustomerId,
           vehicleId: finalVehicleId || '',
           estHours: data.estHours,
           priority: data.priority,
@@ -386,13 +402,18 @@ export function JobForm({
           invoiceNumber: invoiceNumberForPayload,
         };
 
-        const newJob = await createJob(createData);
+        const jobResponse = await createJob(createData);
+        const createdJobId = jobResponse.data?.id;
+
+        if (!createdJobId) {
+          throw new Error('Failed to create job record. Please try again.');
+        }
 
         // Create call record if in intake mode
         if (data.isIntakeMode && finalCustomerId) {
           const callData: CreateCallData = {
             customerId: finalCustomerId,
-            jobId: newJob.id,
+            jobId: createdJobId,
             phoneNumber: data.customerPhone || '',
             callStartTime: new Date().toISOString(),
             callDuration: 0, // Will be updated when call ends
