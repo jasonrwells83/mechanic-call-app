@@ -31,7 +31,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCustomers } from '@/hooks/use-customers';
+import { useCustomer } from '@/hooks/use-customers';
 import { useJobs } from '@/hooks/use-jobs';
 import { useVehicles } from '@/hooks/use-vehicles';
 import { VehicleManagement } from '@/components/vehicles/VehicleManagement';
@@ -62,11 +62,11 @@ export function CustomerDetailView({
   const [activeTab, setActiveTab] = useState('overview');
 
   // Fetch customer data
-  const { data: customersResponse } = useCustomers({ ids: [customerId] });
+  const { data: customerResponse } = useCustomer(customerId);
   const { data: jobsResponse } = useJobs({ customerId });
   const { data: vehiclesResponse } = useVehicles({ customerId });
 
-  const customer = customersResponse?.data?.[0];
+  const customer = customerResponse?.data;
   const jobs = jobsResponse?.data || [];
   const vehicles = vehiclesResponse?.data || [];
 

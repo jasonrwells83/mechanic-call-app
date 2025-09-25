@@ -1,17 +1,18 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { SchedulingCalendar, CalendarLegend, type SchedulingCalendarHandle, type CalendarEventSnapshot } from '@/components/calendar/SchedulingCalendar';
 import { DraggableJobList } from '@/components/calendar/DraggableJobList';
-import { AvailabilitySuggestions, type SchedulingSuggestion } from '@/components/calendar/AvailabilitySuggestions';
-import { useCalendarAppointments, useCalendarView, useBayUtilization } from '@/hooks/use-calendar';
+import { useCalendarAppointments, useCalendarView } from '@/hooks/use-calendar';
+import { jobApi, appointmentApi } from '@/lib/api-client';
+import { useUIStore } from '@/stores';
 import { format, endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CallIntakeForm, type CallIntakeData } from '@/components/calls/CallIntakeForm';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Clock, Users, TrendingUp, Plus, Layers, Printer, ClipboardList, ChevronDown } from 'lucide-react';
+import { Calendar, Clock, Users, Layers, Printer, ClipboardList, ChevronDown, Phone } from 'lucide-react';
 import type { EventDropArg, EventResizeArg, DateSelectArg, EventReceiveArg } from '@fullcalendar/core';
 import '@/components/calendar/calendar.css';
 
@@ -46,7 +47,7 @@ export function CalendarPage() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportSummary, setReportSummary] = useState<ScheduleReportSummary | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [selectedJobForSuggestions, setSelectedJobForSuggestions] = useState<any>(null);
+  const [isCallIntakeOpen, setIsCallIntakeOpen] = useState(false);
   
   // Calendar hooks
   const {
@@ -58,7 +59,7 @@ export function CalendarPage() {
   } = useCalendarAppointments();
 
   const { currentDate } = useCalendarView();
-  const bayUtilization = useBayUtilization(calendarEvents, currentDate);
+  const { addToast } = useUIStore();
 
   // Event handlers
   const onEventClick = (event: any) => {
@@ -66,11 +67,25 @@ export function CalendarPage() {
   };
 
   const onEventDrop = async (dropInfo: EventDropArg) => {
-    await handleEventDrop(dropInfo);
+    try {
+      await handleEventDrop(dropInfo);
+      // Trigger a re-render to update bay utilization cards
+      setSelectedEvent(null);
+      setSelectedEvent(dropInfo.event);
+    } catch (error) {
+      console.error('Failed to handle event drop:', error);
+    }
   };
 
   const onEventResize = async (resizeInfo: EventResizeArg) => {
-    await handleEventResize(resizeInfo);
+    try {
+      await handleEventResize(resizeInfo);
+      // Trigger a re-render to update bay utilization cards
+      setSelectedEvent(null);
+      setSelectedEvent(resizeInfo.event);
+    } catch (error) {
+      console.error('Failed to handle event resize:', error);
+    }
   };
 
   const onDateSelect = (selectInfo: DateSelectArg) => {
@@ -78,53 +93,121 @@ export function CalendarPage() {
   };
 
   const onJobDrop = async (receiveInfo: EventReceiveArg) => {
-    await handleJobDrop(receiveInfo);
-  };
-
-  const handleJobDragStart = (job: any) => {
-    setSelectedJobForSuggestions(job);
-  };
-
-  const handleJobDragEnd = () => {
-    // Keep the job selected for suggestions even after drag ends
-    // This allows users to see suggestions and manually schedule
-  };
-
-  const handleSuggestionSelect = async (suggestion: SchedulingSuggestion) => {
-    if (!selectedJobForSuggestions) return;
-
-    // Create a mock event receive info to simulate dropping the job
-    const mockEvent = {
-      id: `job-${selectedJobForSuggestions.id}`,
-      title: selectedJobForSuggestions.title,
-      start: suggestion.startTime,
-      end: suggestion.endTime,
-      extendedProps: {
-        jobId: selectedJobForSuggestions.id,
-        customerId: selectedJobForSuggestions.customerId,
-        vehicleId: selectedJobForSuggestions.vehicleId,
-        status: selectedJobForSuggestions.status,
-        priority: selectedJobForSuggestions.priority,
-        estimatedHours: selectedJobForSuggestions.estHours,
-        isExternalJob: true,
-      },
-      getResources: () => [{ id: suggestion.bay, title: suggestion.bay === 'bay-1' ? 'Bay 1' : 'Bay 2' }],
-      remove: () => {},
-      setStart: () => {},
-      setEnd: () => {},
-    };
-
-    const mockReceiveInfo = {
-      event: mockEvent as any,
-    };
-
     try {
-      await onJobDrop(mockReceiveInfo as any);
-      setSelectedJobForSuggestions(null); // Clear selection after successful scheduling
+      await handleJobDrop(receiveInfo);
     } catch (error) {
-      console.error('Failed to schedule from suggestion:', error);
+      console.error('Failed to handle job drop:', error);
     }
   };
+
+  // Handle event drag start
+  const onEventDragStart = (info: any) => {
+    setDraggedEvent(info.event);
+    // Add visual feedback to the unschedule zone
+    const unscheduleZone = document.getElementById('unschedule-zone');
+    if (unscheduleZone) {
+      unscheduleZone.classList.add('drop-zone-active');
+    }
+  };
+
+  // Handle event drag stop
+  const onEventDragStop = (info: any) => {
+    // Remove visual feedback from the unschedule zone
+    const unscheduleZone = document.getElementById('unschedule-zone');
+    if (unscheduleZone) {
+      unscheduleZone.classList.remove('drop-zone-active');
+    }
+    
+    // Keep the event reference for a moment to allow drop handling
+    setTimeout(() => {
+      setDraggedEvent(null);
+    }, 100);
+  };
+
+  // Handle unscheduling jobs
+  const handleUnscheduleJob = async (appointmentId: string, jobId: string) => {
+    try {
+      // Delete the appointment
+      await appointmentApi.delete(appointmentId);
+      
+      // Update job status back to 'incoming-call'
+      await jobApi.updateStatus(jobId, 'incoming-call');
+      
+      addToast({
+        type: 'success',
+        title: 'Job Unscheduled',
+        message: 'Job has been moved back to unscheduled list',
+        duration: 3000,
+      });
+      
+      // Refresh the page to update both calendar and unscheduled jobs list
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to unschedule job:', error);
+      addToast({
+        type: 'error',
+        title: 'Failed to Unschedule',
+        message: 'Could not unschedule the job. Please try again.',
+        duration: 5000,
+      });
+    }
+  };
+
+  // Store dragged event for unscheduling
+  const [draggedEvent, setDraggedEvent] = useState<any>(null);
+
+  // Set up unschedule drop zone with mouse position tracking
+  useEffect(() => {
+    const unscheduleZone = document.getElementById('unschedule-zone');
+    if (!unscheduleZone || !draggedEvent) return;
+
+    let isOverDropZone = false;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = unscheduleZone.getBoundingClientRect();
+      const isInZone = (
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom
+      );
+
+      if (isInZone && !isOverDropZone) {
+        isOverDropZone = true;
+        unscheduleZone.classList.add('bg-orange-200/50', 'border-orange-400', 'shadow-lg');
+      } else if (!isInZone && isOverDropZone) {
+        isOverDropZone = false;
+        unscheduleZone.classList.remove('bg-orange-200/50', 'border-orange-400', 'shadow-lg');
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isOverDropZone && draggedEvent) {
+        const appointmentId = draggedEvent.extendedProps?.appointmentId || draggedEvent.id;
+        const jobId = draggedEvent.extendedProps?.jobId;
+        
+        if (appointmentId && jobId) {
+          // Remove the event from the calendar immediately for visual feedback
+          draggedEvent.remove();
+          handleUnscheduleJob(appointmentId, jobId);
+        }
+      }
+      
+      // Clean up
+      unscheduleZone.classList.remove('bg-orange-200/50', 'border-orange-400', 'shadow-lg');
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      unscheduleZone.classList.remove('bg-orange-200/50', 'border-orange-400', 'shadow-lg');
+    };
+  }, [draggedEvent]);
 
   const formatBayLabel = (bay: string | null | undefined) => {
     if (!bay) {
@@ -286,95 +369,45 @@ export function CalendarPage() {
               <DropdownMenuItem onSelect={() => handlePrintSchedule('month')}>Month calendar</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Schedule Job
+          <Button onClick={() => setIsCallIntakeOpen(true)}>
+            <Phone className="h-4 w-4 mr-2" />
+            New Call
           </Button>
         </div>
       </div>
 
-      {/* Bay Utilization Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bay 1 Utilization</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {Math.round(bayUtilization['bay-1']?.utilizationRate || 0)}%
-            </div>
-            <Progress 
-              value={bayUtilization['bay-1']?.utilizationRate || 0} 
-              className="mt-2" 
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {bayUtilization['bay-1']?.appointmentCount || 0} appointments today
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bay 2 Utilization</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {Math.round(bayUtilization['bay-2']?.utilizationRate || 0)}%
-            </div>
-            <Progress 
-              value={bayUtilization['bay-2']?.utilizationRate || 0} 
-              className="mt-2" 
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {bayUtilization['bay-2']?.appointmentCount || 0} appointments today
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Capacity</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {Math.round(
-                ((bayUtilization['bay-1']?.utilizationRate || 0) + 
-                 (bayUtilization['bay-2']?.utilizationRate || 0)) / 2
-              )}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {(bayUtilization['bay-1']?.bookedHours || 0) + 
-               (bayUtilization['bay-2']?.bookedHours || 0)} / 18 hours booked
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Main Calendar Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-8 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-6 gap-6">
         {/* Draggable Jobs Sidebar */}
-        <div className="xl:col-span-1 print:hidden">
-          <DraggableJobList 
-            onJobDragStart={handleJobDragStart}
-            onJobDragEnd={handleJobDragEnd}
-          />
-        </div>
-
-        {/* Availability Suggestions */}
-        <div className="xl:col-span-1 print:hidden">
-          <AvailabilitySuggestions
-            job={selectedJobForSuggestions}
-            existingEvents={calendarEvents}
-            selectedDate={currentDate}
-            onSuggestionSelect={handleSuggestionSelect}
-          />
+        <div className="xl:col-span-1 print:hidden space-y-4">
+          <DraggableJobList />
+          
+          {/* Unschedule Zone */}
+          <Card className="border-dashed border-2 border-orange-300 bg-orange-50/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700">
+                <Clock className="h-4 w-4" />
+                Unschedule Zone
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div 
+                id="unschedule-zone"
+                className="min-h-[100px] flex items-center justify-center text-center p-4 rounded-lg border-2 border-dashed border-orange-300 bg-orange-100/30 text-orange-600 text-sm transition-all duration-200 hover:bg-orange-100/50"
+              >
+                <div>
+                  <Clock className="h-6 w-6 mx-auto mb-2 opacity-60" />
+                  <p className="font-medium">Drop jobs here to unschedule</p>
+                  <p className="text-xs opacity-75 mt-1">Jobs will return to unscheduled list</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Calendar Component */}
-        <div className="xl:col-span-4 print:col-span-8">
+        <div className="xl:col-span-4 print:col-span-6">
           <Card>
             <CardContent className="p-0">
               <SchedulingCalendar ref={calendarRef}
@@ -383,6 +416,8 @@ export function CalendarPage() {
                 onEventResize={onEventResize}
                 onDateSelect={onDateSelect}
                 onEventReceive={onJobDrop}
+                onEventDragStart={onEventDragStart}
+                onEventDragStop={onEventDragStop}
                 height="700px"
                 className="rounded-lg"
               />
@@ -391,7 +426,7 @@ export function CalendarPage() {
         </div>
 
         {/* Right Sidebar with Legend and Quick Info */}
-        <div className="xl:col-span-2 space-y-4 print:hidden">
+        <div className="xl:col-span-1 space-y-4 print:hidden">
           <CalendarLegend />
           
           {/* Quick Stats */}
@@ -406,16 +441,21 @@ export function CalendarPage() {
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Total Appointments</span>
                 <Badge variant="secondary">
-                  {(bayUtilization['bay-1']?.appointmentCount || 0) + 
-                   (bayUtilization['bay-2']?.appointmentCount || 0)}
+                  {calendarEvents.filter(event => 
+                    new Date(event.start).toDateString() === currentDate.toDateString()
+                  ).length}
                 </Badge>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Hours Booked</span>
                 <Badge variant="secondary">
                   {Math.round(
-                    ((bayUtilization['bay-1']?.bookedHours || 0) + 
-                     (bayUtilization['bay-2']?.bookedHours || 0)) * 10
+                    calendarEvents
+                      .filter(event => new Date(event.start).toDateString() === currentDate.toDateString())
+                      .reduce((total, event) => {
+                        const duration = (new Date(event.end).getTime() - new Date(event.start).getTime()) / (1000 * 60 * 60);
+                        return total + duration;
+                      }, 0) * 10
                   ) / 10}h
                 </Badge>
               </div>
@@ -423,8 +463,12 @@ export function CalendarPage() {
                 <span className="text-muted-foreground">Available Hours</span>
                 <Badge variant="outline">
                   {Math.round(
-                    (18 - ((bayUtilization['bay-1']?.bookedHours || 0) + 
-                           (bayUtilization['bay-2']?.bookedHours || 0))) * 10
+                    (18 - calendarEvents
+                      .filter(event => new Date(event.start).toDateString() === currentDate.toDateString())
+                      .reduce((total, event) => {
+                        const duration = (new Date(event.end).getTime() - new Date(event.start).getTime()) / (1000 * 60 * 60);
+                        return total + duration;
+                      }, 0)) * 10
                   ) / 10}h
                 </Badge>
               </div>
@@ -566,6 +610,27 @@ export function CalendarPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Call Intake Dialog */}
+      <Dialog open={isCallIntakeOpen} onOpenChange={setIsCallIntakeOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Call Intake</DialogTitle>
+            <DialogDescription>
+              Record incoming customer call and create service request
+            </DialogDescription>
+          </DialogHeader>
+          <CallIntakeForm
+            onSubmit={(callData: CallIntakeData) => {
+              console.log('Call intake submitted:', callData);
+              setIsCallIntakeOpen(false);
+              // Here you would typically save the call data and potentially create a job
+              // For now, we'll just close the dialog
+            }}
+            onCancel={() => setIsCallIntakeOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>

@@ -109,7 +109,7 @@ export function CommunicationAnalytics({
     ).map(([type, count]) => ({
       type,
       count,
-      percentage: (count / totalCommunications) * 100,
+      percentage: totalCommunications > 0 ? (count / totalCommunications) * 100 : 0,
     }));
 
     // Status breakdown
@@ -121,7 +121,7 @@ export function CommunicationAnalytics({
     ).map(([status, count]) => ({
       status,
       count,
-      percentage: (count / totalCommunications) * 100,
+      percentage: totalCommunications > 0 ? (count / totalCommunications) * 100 : 0,
     }));
 
     // Response rates
@@ -168,7 +168,7 @@ export function CommunicationAnalytics({
     ).map(([priority, count]) => ({
       priority,
       count,
-      percentage: (count / totalCommunications) * 100,
+      percentage: totalCommunications > 0 ? (count / totalCommunications) * 100 : 0,
     }));
 
     // Peak hours
@@ -183,9 +183,11 @@ export function CommunicationAnalytics({
       };
     });
 
-    const peakHour = hourlyBreakdown.reduce((max, current) => 
-      current.count > max.count ? current : max
-    );
+    const peakHour = hourlyBreakdown.length > 0 
+      ? hourlyBreakdown.reduce((max, current) => 
+          current.count > max.count ? current : max
+        )
+      : { hour: 0, count: 0, label: '0:00' };
 
     return {
       totalCommunications,
@@ -340,11 +342,11 @@ export function CommunicationAnalytics({
               <div className="text-right">
                 <div className="text-sm font-medium">{analytics.inboundCount}</div>
                 <div className="text-xs text-muted-foreground">
-                  {((analytics.inboundCount / analytics.totalCommunications) * 100).toFixed(1)}%
+                  {analytics.totalCommunications > 0 ? ((analytics.inboundCount / analytics.totalCommunications) * 100).toFixed(1) : '0'}%
                 </div>
               </div>
             </div>
-            <Progress value={(analytics.inboundCount / analytics.totalCommunications) * 100} />
+            <Progress value={analytics.totalCommunications > 0 ? (analytics.inboundCount / analytics.totalCommunications) * 100 : 0} />
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -354,11 +356,11 @@ export function CommunicationAnalytics({
               <div className="text-right">
                 <div className="text-sm font-medium">{analytics.outboundCount}</div>
                 <div className="text-xs text-muted-foreground">
-                  {((analytics.outboundCount / analytics.totalCommunications) * 100).toFixed(1)}%
+                  {analytics.totalCommunications > 0 ? ((analytics.outboundCount / analytics.totalCommunications) * 100).toFixed(1) : '0'}%
                 </div>
               </div>
             </div>
-            <Progress value={(analytics.outboundCount / analytics.totalCommunications) * 100} />
+            <Progress value={analytics.totalCommunications > 0 ? (analytics.outboundCount / analytics.totalCommunications) * 100 : 0} />
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -368,11 +370,11 @@ export function CommunicationAnalytics({
               <div className="text-right">
                 <div className="text-sm font-medium">{analytics.systemCount}</div>
                 <div className="text-xs text-muted-foreground">
-                  {((analytics.systemCount / analytics.totalCommunications) * 100).toFixed(1)}%
+                  {analytics.totalCommunications > 0 ? ((analytics.systemCount / analytics.totalCommunications) * 100).toFixed(1) : '0'}%
                 </div>
               </div>
             </div>
-            <Progress value={(analytics.systemCount / analytics.totalCommunications) * 100} />
+            <Progress value={analytics.totalCommunications > 0 ? (analytics.systemCount / analytics.totalCommunications) * 100 : 0} />
           </CardContent>
         </Card>
 
@@ -455,15 +457,21 @@ export function CommunicationAnalytics({
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <Zap className="h-8 w-8 mx-auto mb-2 text-green-600" />
               <div className="text-2xl font-bold">
-                {analytics.typeBreakdown.reduce((max, current) => 
-                  current.count > max.count ? current : max
-                ).type}
+                {analytics.typeBreakdown.length > 0 
+                  ? analytics.typeBreakdown.reduce((max, current) => 
+                      current.count > max.count ? current : max
+                    ).type
+                  : 'N/A'
+                }
               </div>
               <p className="text-sm text-muted-foreground">Most Used Channel</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {analytics.typeBreakdown.reduce((max, current) => 
-                  current.count > max.count ? current : max
-                ).percentage.toFixed(1)}% of all communications
+                {analytics.typeBreakdown.length > 0 
+                  ? analytics.typeBreakdown.reduce((max, current) => 
+                      current.count > max.count ? current : max
+                    ).percentage.toFixed(1)
+                  : '0'
+                }% of all communications
               </p>
             </div>
             

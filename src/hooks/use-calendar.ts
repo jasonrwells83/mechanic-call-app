@@ -92,9 +92,15 @@ export function useCalendarAppointments(dateRange?: { start: string; end: string
   // Handle event drop (drag and drop)
   const handleEventDrop = useCallback(async (dropInfo: EventDropArg) => {
     const { event, oldResource, newResource } = dropInfo;
-    const appointmentId = event.extendedProps.appointmentId;
+    // Try multiple ways to get the appointment ID
+    const appointmentId = event.extendedProps.appointmentId || event.id;
     
     if (!appointmentId) {
+      console.error('Event drop failed - no appointment ID found. Event details:', {
+        eventId: event.id,
+        extendedProps: event.extendedProps,
+        title: event.title
+      });
       throw new Error('No appointment ID found');
     }
 
@@ -113,9 +119,15 @@ export function useCalendarAppointments(dateRange?: { start: string; end: string
   // Handle event resize
   const handleEventResize = useCallback(async (resizeInfo: EventResizeArg) => {
     const { event } = resizeInfo;
-    const appointmentId = event.extendedProps.appointmentId;
+    // Try multiple ways to get the appointment ID
+    const appointmentId = event.extendedProps.appointmentId || event.id;
     
     if (!appointmentId) {
+      console.error('Event resize failed - no appointment ID found. Event details:', {
+        eventId: event.id,
+        extendedProps: event.extendedProps,
+        title: event.title
+      });
       throw new Error('No appointment ID found');
     }
 

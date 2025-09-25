@@ -146,6 +146,14 @@
   transform: translateY(-1px);
 }
 
+/* Only highlight on mouse down (click and hold), not on click */
+.fc-event:active {
+  background-color: hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary)) !important;
+  transform: scale(0.98);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 .fc-event-dragging {
   opacity: 0.8;
   transform: rotate(2deg);
@@ -159,53 +167,152 @@
 /* Event content */
 .fc-event-title {
   font-weight: 600;
+  line-height: 1.2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3; /* Allow up to 3 lines */
+  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+  font-size: 0.75rem;
 }
 
 .fc-event-time {
   font-size: 0.625rem;
   opacity: 0.8;
   font-weight: 400;
+  margin-bottom: 2px;
 }
 
-/* Status-based event styling */
-.calendar-event.status-incoming-call {
+/* Better event content layout for detailed information */
+.fc-event-main {
+  padding: 4px 6px;
+  line-height: 1.3;
+}
+
+/* Adjust event height for day view to accommodate more content */
+.fc-timegrid-event {
+  min-height: 50px;
+}
+
+.fc-timegrid-event .fc-event-main {
+  padding: 6px 8px;
+}
+
+/* Make sure text is readable in all status colors */
+.fc-event-title-container {
+  position: relative;
+  z-index: 2;
+}
+
+/* Custom event content styling for better readability */
+.custom-event-content {
+  padding: 4px 2px;
+  line-height: 1.2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.event-job-title {
+  font-weight: 700;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.2;
+  margin-bottom: 2px;
+  color: #000000 !important;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.event-customer {
+  font-weight: 500;
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.1;
+  margin-bottom: 1px;
+  color: #000000 !important;
+  opacity: 0.9;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.event-vehicle {
+  font-weight: 400;
+  font-size: 0.75rem; /* 12px */
+  line-height: 1.1;
+  color: #000000 !important;
+  opacity: 0.8;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Ensure events have enough height for content */
+.fc-timegrid-event .custom-event-content {
+  min-height: 40px;
+}
+
+/* Better spacing for short events */
+.fc-timegrid-event[style*="height: 18px"] .custom-event-content,
+.fc-timegrid-event[style*="height: 19px"] .custom-event-content,
+.fc-timegrid-event[style*="height: 20px"] .custom-event-content {
+  min-height: auto;
+}
+
+.fc-timegrid-event[style*="height: 18px"] .event-job-title,
+.fc-timegrid-event[style*="height: 19px"] .event-job-title,
+.fc-timegrid-event[style*="height: 20px"] .event-job-title {
+  font-size: 0.8125rem;
+  -webkit-line-clamp: 1;
+}
+
+.fc-timegrid-event[style*="height: 18px"] .event-customer,
+.fc-timegrid-event[style*="height: 19px"] .event-customer,
+.fc-timegrid-event[style*="height: 20px"] .event-customer,
+.fc-timegrid-event[style*="height: 18px"] .event-vehicle,
+.fc-timegrid-event[style*="height: 19px"] .event-vehicle,
+.fc-timegrid-event[style*="height: 20px"] .event-vehicle {
+  display: none;
+}
+
+/* Status-based event styling - higher specificity to override defaults */
+.fc-event.calendar-event.status-incoming-call:not(.fc-event-dragging) {
   background: #f3f4f6 !important;
   border-color: #6b7280 !important;
-  color: #374151 !important;
+  color: #000000 !important;
 }
 
-.calendar-event.status-scheduled {
+.fc-event.calendar-event.status-scheduled:not(.fc-event-dragging) {
   background: #e3f2fd !important;
   border-color: #1976d2 !important;
-  color: #0d47a1 !important;
+  color: #000000 !important;
 }
 
-.calendar-event.status-in-bay {
+.fc-event.calendar-event.status-in-bay:not(.fc-event-dragging) {
   background: #e8f5e8 !important;
   border-color: #388e3c !important;
-  color: #1b5e20 !important;
+  color: #000000 !important;
 }
 
-.calendar-event.status-waiting-parts {
+.fc-event.calendar-event.status-waiting-parts:not(.fc-event-dragging) {
   background: #fff3e0 !important;
   border-color: #f57c00 !important;
-  color: #e65100 !important;
+  color: #000000 !important;
   background-image: repeating-linear-gradient(
     45deg,
     transparent,
     transparent 2px,
     rgba(245, 124, 0, 0.1) 2px,
     rgba(245, 124, 0, 0.1) 4px
-  );
+  ) !important;
 }
 
-.calendar-event.status-completed {
+.fc-event.calendar-event.status-completed:not(.fc-event-dragging) {
   background: #f5f5f5 !important;
   border-color: #9e9e9e !important;
-  color: #424242 !important;
+  color: #000000 !important;
   opacity: 0.7;
 }
 
@@ -433,6 +540,56 @@ body.job-dragging .fc-timegrid-slot.has-conflict:hover {
   outline-offset: 1px;
 }
 
+/* COMPLETELY DISABLE event selection styling */
+.fc-event.fc-event-selected,
+.fc-event-selected,
+.fc-h-event.fc-event-selected,
+.fc-v-event.fc-event-selected,
+.fc-event.fc-event-selected .fc-event-main,
+.fc-event-selected .fc-event-main {
+  background-color: inherit !important;
+  border-color: inherit !important;
+  box-shadow: inherit !important;
+  filter: none !important;
+  opacity: inherit !important;
+  transform: none !important;
+}
+
+/* Remove any FullCalendar default selection styles */
+.fc .fc-event.fc-event-selected,
+.fc .fc-event-selected {
+  background-color: inherit !important;
+  border-color: inherit !important;
+  box-shadow: inherit !important;
+}
+
+/* Disable click highlighting - only show on mousedown, not on click - but preserve default colors */
+.fc-event:not(.fc-event-dragging):not(.fc-event-resizing):not(.fc-event-selected) {
+  /* Don't override background colors - let them show naturally */
+  box-shadow: inherit !important;
+  filter: none !important;
+  opacity: inherit !important;
+  transform: none !important;
+}
+
+/* Only show visual feedback during mousedown (not click) */
+.fc-event:active:not(.fc-event-dragging):not(.fc-event-resizing) {
+  background-color: hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary)) !important;
+  transform: scale(0.98) !important;
+  transition: all 0.1s ease !important;
+}
+
+/* Show selection only during dragging */
+.fc-event.fc-event-dragging {
+  background-color: hsl(var(--primary) / 0.2) !important;
+  border-color: hsl(var(--primary)) !important;
+  opacity: 0.8 !important;
+  transform: rotate(2deg) scale(1.02) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  z-index: 1000 !important;
+}
+
 .fc-button:focus {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 1px;
@@ -473,4 +630,33 @@ body.job-dragging .fc-timegrid-slot.has-conflict:hover {
 
 .fc-scroller::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Drop zone styles */
+.drop-zone-active {
+  border-color: #f97316 !important;
+  background-color: rgba(251, 146, 60, 0.2) !important;
+  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.3) !important;
+  transform: scale(1.02) !important;
+}
+
+.drop-zone-active::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid #f97316;
+  border-radius: inherit;
+  background: linear-gradient(45deg, transparent 25%, rgba(251, 146, 60, 0.1) 25%, rgba(251, 146, 60, 0.1) 50%, transparent 50%, transparent 75%, rgba(251, 146, 60, 0.1) 75%);
+  background-size: 8px 8px;
+  animation: drop-zone-pulse 1.5s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes drop-zone-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }

@@ -152,6 +152,7 @@ export const defaultCalendarConfig: Partial<CalendarOptions> = {
       slotMaxTime: '19:00:00',
       slotDuration: '00:30:00', // 30-minute slots
       slotLabelInterval: '01:00:00', // Hour labels
+      eventMinHeight: 50, // Minimum height for events to show content
       resourceAreaWidth: '15%',
       resourceAreaColumns: [
         {
@@ -167,6 +168,7 @@ export const defaultCalendarConfig: Partial<CalendarOptions> = {
       slotMinTime: '07:00:00',
       slotMaxTime: '19:00:00',
       slotDuration: '01:00:00', // 1-hour slots for week view
+      eventMinHeight: 45, // Slightly smaller for week view
       resourceAreaWidth: '12%',
     },
     dayGridMonth: {
@@ -188,13 +190,20 @@ export const defaultCalendarConfig: Partial<CalendarOptions> = {
   // Interaction settings
   editable: true,
   droppable: true,
-  selectable: true,
-  selectMirror: true,
+  selectable: false,  // Disable selection to prevent highlighting issues
+  selectMirror: false,
+  unselectAuto: false, // Don't auto-unselect to avoid selector issues
+  eventStartEditable: true,
+  eventDurationEditable: true,
 
   // Event settings
   eventResizableFromStart: true,
   eventDurationEditable: true,
   eventStartEditable: true,
+  
+  // Enable dragging events outside the calendar
+  dragRevertDuration: 500,
+  eventDragMinDistance: 5,
 
   // Styling
   height: 'auto',
@@ -220,6 +229,32 @@ export const defaultCalendarConfig: Partial<CalendarOptions> = {
     }
 
     return classes;
+  },
+
+  // Custom event content to format multi-line information
+  eventContent: (arg) => {
+    const { event } = arg;
+    const props = event.extendedProps;
+    
+    // For day/week views, show more detailed content
+    if (arg.view.type.includes('timeGrid')) {
+      const jobTitle = event.title.split(' - ')[0]; // Get just the job part
+      const customerName = props?.customerName;
+      const vehicleInfo = props?.vehicleInfo;
+      
+      return {
+        html: `
+          <div class="custom-event-content">
+            <div class="event-job-title">${jobTitle}</div>
+            ${customerName ? `<div class="event-customer">${customerName}</div>` : ''}
+            ${vehicleInfo ? `<div class="event-vehicle">${vehicleInfo}</div>` : ''}
+          </div>
+        `
+      };
+    }
+    
+    // For month view, keep it simpler
+    return { html: `<div class="fc-event-title">${event.title}</div>` };
   },
 
   // Enhanced event styling function
@@ -440,9 +475,23 @@ export function createCalendarEvent(
   customer?: any,
   vehicle?: any
 ): CalendarEvent {
+  // Create a detailed title with job, customer, and vehicle info
+  const jobTitle = job?.title || `Job ${appointment.jobId}`;
+  const customerName = customer?.name;
+  const vehicleInfo = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : undefined;
+  
+  // Build title with available information
+  let title = jobTitle;
+  if (customerName) {
+    title += ` - ${customerName}`;
+  }
+  if (vehicleInfo) {
+    title += ` (${vehicleInfo})`;
+  }
+
   return {
     id: appointment.id,
-    title: job?.title || `Job ${appointment.jobId}`,
+    title,
     start: new Date(appointment.startAt),
     end: new Date(appointment.endAt),
     resourceId: appointment.bay,

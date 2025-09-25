@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -15,7 +16,8 @@ import {
   AlertCircle,
   ArrowRight,
   Zap,
-  Target
+  Target,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateTimeSlots, checkBayAvailability } from '@/lib/calendar-config';
@@ -26,6 +28,7 @@ interface AvailabilitySuggestionsProps {
   existingEvents: CalendarEvent[];
   selectedDate?: Date;
   onSuggestionSelect: (suggestion: SchedulingSuggestion) => void;
+  onClearJob?: () => void;
   className?: string;
 }
 
@@ -322,6 +325,7 @@ export function AvailabilitySuggestions({
   existingEvents,
   selectedDate = new Date(),
   onSuggestionSelect,
+  onClearJob,
   className = '',
 }: AvailabilitySuggestionsProps) {
   const [suggestions, setSuggestions] = useState<SchedulingSuggestion[]>([]);
@@ -408,6 +412,17 @@ export function AvailabilitySuggestions({
               {suggestions.length}
             </Badge>
           </CardTitle>
+          {onClearJob && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearJob}
+              className="h-6 w-6 p-0"
+              title="Clear selected job"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           Optimal scheduling for {job.title} ({job.estHours}h)

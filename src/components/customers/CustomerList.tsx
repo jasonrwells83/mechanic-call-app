@@ -1,7 +1,7 @@
 // Customer List Component
 // Comprehensive customer management with list view, search, and filtering
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
@@ -32,17 +30,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Search,
-  Filter,
   MoreHorizontal,
   Phone,
   Mail,
   MapPin,
   Car,
-  Calendar,
   DollarSign,
   TrendingUp,
   Users,
@@ -50,10 +45,6 @@ import {
   Eye,
   Edit,
   Archive,
-  Star,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
   Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -70,46 +61,15 @@ interface CustomerListProps {
   className?: string;
 }
 
-// Customer status based on recent activity
-type CustomerStatus = 'active' | 'inactive' | 'new' | 'vip';
-
-function getCustomerStatus(customer: Customer, recentJobs: any[]): CustomerStatus {
-  const customerJobs = recentJobs.filter(job => job.customerId === customer.id);
-  const lastJobDate = customerJobs.length > 0 
-    ? Math.max(...customerJobs.map(job => new Date(job.createdAt).getTime()))
-    : 0;
-  
-  const daysSinceLastJob = (Date.now() - lastJobDate) / (1000 * 60 * 60 * 24);
-  const totalJobs = customerJobs.length;
-  
-  if (totalJobs === 0) return 'new';
-  if (totalJobs >= 10 || customerJobs.some(job => job.priority === 'high')) return 'vip';
-  if (daysSinceLastJob <= 30) return 'active';
-  return 'inactive';
+interface ExtendedCustomer extends Customer {
+  totalJobs: number;
+  activeJobs: number;
+  totalVehicles: number;
+  lastJobDate: Date | null;
+  totalRevenue: number;
+  vehicles: any[];
 }
 
-const statusConfig = {
-  active: {
-    label: 'Active',
-    color: 'bg-green-100 text-green-800 border-green-200',
-    icon: CheckCircle,
-  },
-  inactive: {
-    label: 'Inactive',
-    color: 'bg-gray-100 text-gray-800 border-gray-200',
-    icon: Clock,
-  },
-  new: {
-    label: 'New',
-    color: 'bg-blue-100 text-blue-800 border-blue-200',
-    icon: Star,
-  },
-  vip: {
-    label: 'VIP',
-    color: 'bg-purple-100 text-purple-800 border-purple-200',
-    icon: TrendingUp,
-  },
-};
 
 export function CustomerList({
   onCustomerSelect,
@@ -120,8 +80,7 @@ export function CustomerList({
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'new' | 'vip'>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'totalSpent' | 'lastVisit' | 'jobCount'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'lastJob' | 'totalJobs' | 'created'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -136,28 +95,26 @@ export function CustomerList({
 
   const customers = customersResponse?.data || [];
   const jobs = jobsResponse?.data || [];
-  const vehicles = vehiclesResponse?.data || [];
+  const vehicles = (vehiclesResponse as any)?.data || [];
 
   // Create customer statistics
-  const customerStats = useMemo(() => {
-    return customers.map(customer => {
-      const customerJobs = jobs.filter(job => job.customerId === customer.id);
-      const customerVehicles = vehicles.filter(vehicle => vehicle.customerId === customer.id);
+  const customerStats = useMemo((): ExtendedCustomer[] => {
+    return customers.map((customer: Customer) => {
+      const customerJobs = jobs.filter((job: any) => job.customerId === customer.id);
+      const customerVehicles = vehicles.filter((vehicle: any) => vehicle.customerId === customer.id);
       
       const totalJobs = customerJobs.length;
-      const activeJobs = customerJobs.filter(job => 
+      const activeJobs = customerJobs.filter((job: any) => 
         job.status === 'scheduled' || job.status === 'in-bay' || job.status === 'waiting-parts'
       ).length;
       
       const lastJobDate = customerJobs.length > 0 
-        ? new Date(Math.max(...customerJobs.map(job => new Date(job.createdAt).getTime())))
+        ? new Date(Math.max(...customerJobs.map((job: any) => new Date(job.createdAt).getTime())))
         : null;
       
       const totalRevenue = customerJobs
-        .filter(job => job.status === 'completed')
-        .reduce((sum, job) => sum + (job.estHours * 100), 0); // Simplified revenue calculation
-      
-      const status = getCustomerStatus(customer, jobs);
+        .filter((job: any) => job.status === 'completed')
+        .reduce((sum: number, job: any) => sum + (job.estHours * 100), 0); // Simplified revenue calculation
       
       return {
         ...customer,
@@ -166,23 +123,20 @@ export function CustomerList({
         totalVehicles: customerVehicles.length,
         lastJobDate,
         totalRevenue,
-        status,
         vehicles: customerVehicles,
       };
     });
   }, [customers, jobs, vehicles]);
 
   // Filter and sort customers
-  const filteredAndSortedCustomers = useMemo(() => {
-    const filtered = customerStats.filter(customer => {
+  const filteredAndSortedCustomers = useMemo((): ExtendedCustomer[] => {
+    const filtered = customerStats.filter((customer: ExtendedCustomer) => {
       const matchesSearch = !searchQuery || 
         customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.phone.includes(searchQuery);
       
-      const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
-      
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
 
     // Sort customers
@@ -218,27 +172,19 @@ export function CustomerList({
     });
 
     return filtered;
-  }, [customerStats, searchQuery, statusFilter, sortBy, sortOrder]);
+  }, [customerStats, searchQuery, sortBy, sortOrder]);
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
     const total = customers.length;
-    const active = customerStats.filter(c => c.status === 'active').length;
-    const newCustomers = customerStats.filter(c => c.status === 'new').length;
-    const vipCustomers = customerStats.filter(c => c.status === 'vip').length;
+    const thisMonth = new Date();
+    thisMonth.setDate(1);
+    const newCustomers = customerStats.filter(c => new Date(c.createdAt) >= thisMonth).length;
     const totalRevenue = customerStats.reduce((sum, c) => sum + c.totalRevenue, 0);
     
-    return { total, active, newCustomers, vipCustomers, totalRevenue };
+    return { total, newCustomers, totalRevenue };
   }, [customers.length, customerStats]);
 
-  const handleSort = (field: typeof sortBy) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(field);
-      setSortOrder('asc');
-    }
-  };
 
   const handleCustomerAction = (customer: Customer, action: string) => {
     switch (action) {
@@ -288,7 +234,19 @@ export function CustomerList({
   }
 
   // Use filtered customers from advanced search or fall back to all customers
-  const displayCustomers = filteredCustomers.length > 0 || showAdvancedSearch ? filteredCustomers : filteredAndSortedCustomers;
+  const displayCustomers: ExtendedCustomer[] = filteredCustomers.length > 0 || showAdvancedSearch ? 
+    filteredCustomers.map(customer => {
+      const stats = customerStats.find(c => c.id === customer.id);
+      return stats || {
+        ...customer,
+        totalJobs: 0,
+        activeJobs: 0,
+        totalVehicles: 0,
+        lastJobDate: null,
+        totalRevenue: 0,
+        vehicles: []
+      };
+    }) : filteredAndSortedCustomers;
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -301,7 +259,7 @@ export function CustomerList({
       )}
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
@@ -315,31 +273,6 @@ export function CustomerList({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{summaryStats.active}</div>
-            <p className="text-xs text-muted-foreground">
-              {Math.round((summaryStats.active / summaryStats.total) * 100)}% of total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">VIP Customers</CardTitle>
-            <Star className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{summaryStats.vipCustomers}</div>
-            <p className="text-xs text-muted-foreground">
-              High-value customers
-            </p>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -407,17 +340,6 @@ export function CustomerList({
               />
             </div>
             
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as CustomerStatus | 'all')}
-              className="px-3 py-2 border border-input bg-background rounded-md text-sm"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="new">New</option>
-              <option value="vip">VIP</option>
-            </select>
 
             <select
               value={`${sortBy}-${sortOrder}`}
@@ -444,7 +366,6 @@ export function CustomerList({
                 <TableRow>
                   <TableHead className="w-[250px]">Customer</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Vehicles</TableHead>
                   <TableHead>Jobs</TableHead>
                   <TableHead>Last Service</TableHead>
@@ -454,8 +375,6 @@ export function CustomerList({
               </TableHeader>
               <TableBody>
                 {displayCustomers.map((customer) => {
-                  const StatusIcon = statusConfig[customer.status].icon;
-                  
                   return (
                     <TableRow 
                       key={customer.id}
@@ -496,12 +415,6 @@ export function CustomerList({
                         </div>
                       </TableCell>
                       
-                      <TableCell>
-                        <Badge className={cn("text-xs", statusConfig[customer.status].color)}>
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {statusConfig[customer.status].label}
-                        </Badge>
-                      </TableCell>
                       
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -605,12 +518,12 @@ export function CustomerList({
               <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-medium mb-2">No customers found</h3>
               <p className="text-muted-foreground mb-4">
-                {searchQuery || statusFilter !== 'all' 
-                  ? 'Try adjusting your search or filter criteria'
+                {searchQuery 
+                  ? 'Try adjusting your search criteria'
                   : 'Get started by adding your first customer'
                 }
               </p>
-              {!searchQuery && statusFilter === 'all' && (
+              {!searchQuery && (
                 <Button onClick={onCustomerCreate}>
                   <UserPlus className="h-4 w-4 mr-2" />
                   Add First Customer
@@ -654,9 +567,10 @@ export function CustomerList({
               Cancel
             </Button>
             <Button 
-              variant="destructive" 
+              variant="outline" 
               onClick={handleDeleteConfirm}
               disabled={deleteCustomerMutation.isPending}
+              className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
             >
               {deleteCustomerMutation.isPending ? (
                 <>

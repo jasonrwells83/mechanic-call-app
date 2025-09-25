@@ -6,11 +6,10 @@ import { Separator } from '@/components/ui/separator';
 import { LeftNavigation } from './LeftNavigation';
 import { TopBar } from './TopBar';
 import { RightDockPanel } from './RightDockPanel';
-import { useUIStore, useKeyboardStore } from '@/stores';
+import { useKeyboardStore } from '@/stores';
 
 export function MainLayout() {
   const navigate = useNavigate();
-  const { isRightDockCollapsed, setRightDockCollapsed } = useUIStore();
   const { handleKeyDown } = useKeyboardStore();
 
   // Global keyboard shortcuts using the keyboard store
@@ -48,7 +47,7 @@ export function MainLayout() {
           <ResizableHandle withHandle />
           
           {/* Main Content Panel */}
-          <ResizablePanel defaultSize={isRightDockCollapsed ? 84 : 60} minSize={40}>
+          <ResizablePanel defaultSize={84} minSize={40}>
             <ScrollArea className="h-full">
               <div className="p-6">
                 <Outlet />

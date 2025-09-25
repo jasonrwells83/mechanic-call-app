@@ -36,6 +36,8 @@ interface SchedulingCalendarProps {
   onEventChange?: (info: EventChangeArg) => void;
   onEventReceive?: (info: EventReceiveArg) => void;
   onEventLeave?: (info: EventLeaveArg) => void;
+  onEventDragStart?: (info: any) => void;
+  onEventDragStop?: (info: any) => void;
   height?: string | number;
   className?: string;
 }
@@ -118,6 +120,8 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
     onEventChange,
     onEventReceive,
     onEventLeave,
+    onEventDragStart,
+    onEventDragStop,
     height = 'auto',
     className = '',
   }: SchedulingCalendarProps,
@@ -275,6 +279,26 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
   // Event handlers
   const handleEventClick = useCallback((clickInfo: EventClickArg) => {
     const event = clickInfo.event;
+    
+    // Prevent default selection behavior
+    clickInfo.jsEvent.preventDefault();
+    clickInfo.jsEvent.stopPropagation();
+    
+    // Force remove any selection styling
+    setTimeout(() => {
+      const eventEl = clickInfo.el;
+      if (eventEl) {
+        eventEl.classList.remove('fc-event-selected');
+        // Force style reset
+        eventEl.style.background = '';
+        eventEl.style.borderColor = '';
+        eventEl.style.boxShadow = '';
+        eventEl.style.filter = '';
+        eventEl.style.opacity = '';
+        eventEl.style.transform = '';
+      }
+    }, 0);
+    
     const calendarEvent: CalendarEvent = {
       id: event.id,
       title: event.title,
@@ -497,6 +521,25 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
 
   // Handle when external events leave the calendar
   const handleEventLeave = useCallback((leaveInfo: EventLeaveArg) => {
+    // Set up drag data for unscheduling
+    const event = leaveInfo.event;
+    const appointmentId = event.extendedProps?.appointmentId || event.id;
+    const jobId = event.extendedProps?.jobId;
+    
+    if (appointmentId && jobId) {
+      // Store data in the drag event for the unschedule zone
+      const dragData = {
+        appointmentId,
+        jobId,
+      };
+      
+      // Use a custom data attribute to pass the data
+      const dragEvent = (leaveInfo as any).jsEvent;
+      if (dragEvent && dragEvent.dataTransfer) {
+        dragEvent.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+      }
+    }
+    
     onEventLeave?.(leaveInfo);
   }, [onEventLeave]);
 
@@ -777,9 +820,14 @@ export const SchedulingCalendar = forwardRef<SchedulingCalendarHandle, Schedulin
     eventResize: handleEventResize,
     eventReceive: handleEventReceive,
     eventLeave: handleEventLeave,
+    eventDragStart: onEventDragStart,
+    eventDragStop: onEventDragStop,
     select: handleDateSelect,
     eventChange: onEventChange,
     loading: setIsLoading,
+    // Completely disable event selection
+    selectAllow: () => false,
+    eventAllow: (dropInfo: any) => true, // Allow drops but not selection
     datesSet: (dateInfo: DatesSetArg) => {
       setCurrentDate(dateInfo.start);
       setCurrentView(dateInfo.view.type);

@@ -162,10 +162,10 @@ export const invalidateQueries = {
   call: (id: string) => queryClient.invalidateQueries({ queryKey: queryKeys.calls.detail(id) }),
   
   // Invalidate all appointment-related queries
-  appointments: (queryClient: any) => queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all }),
+  appointments: () => queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all }),
   
   // Invalidate specific appointment
-  appointment: (queryClient: any, id: string) => queryClient.invalidateQueries({ queryKey: queryKeys.appointments.detail(id) }),
+  appointment: (id: string) => queryClient.invalidateQueries({ queryKey: queryKeys.appointments.detail(id) }),
   
   // Invalidate appointments by date range
   appointmentsByDateRange: (start: string, end: string) => 

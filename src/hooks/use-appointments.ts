@@ -43,8 +43,8 @@ export function useCreateAppointment() {
     mutationFn: appointmentApi.create,
     onSuccess: (appointment) => {
       // Invalidate and refetch appointment queries
-      invalidateQueries.appointments(queryClient);
-      invalidateQueries.appointment(queryClient, appointment.id);
+      invalidateQueries.appointments();
+      invalidateQueries.appointment(appointment.id);
       
       // Also invalidate related queries
       if (appointment.customerId) {
@@ -83,8 +83,8 @@ export function useUpdateAppointment() {
       appointmentApi.update(id, data),
     onSuccess: (appointment) => {
       // Invalidate and refetch appointment queries
-      invalidateQueries.appointments(queryClient);
-      invalidateQueries.appointment(queryClient, appointment.id);
+      invalidateQueries.appointments();
+      invalidateQueries.appointment(appointment.id);
       
       // Also invalidate related queries
       if (appointment.customerId) {
@@ -122,7 +122,7 @@ export function useDeleteAppointment() {
     mutationFn: appointmentApi.delete,
     onSuccess: (_, appointmentId) => {
       // Invalidate and refetch appointment queries
-      invalidateQueries.appointments(queryClient);
+      invalidateQueries.appointments();
       
       // Remove the specific appointment from cache
       queryClient.removeQueries({
@@ -238,8 +238,8 @@ export function useRescheduleAppointment() {
     }) => appointmentApi.reschedule(id, { date: newDate, time: newTime, bay }),
     onSuccess: (appointment) => {
       // Invalidate and refetch appointment queries
-      invalidateQueries.appointments(queryClient);
-      invalidateQueries.appointment(queryClient, appointment.id);
+      invalidateQueries.appointments();
+      invalidateQueries.appointment(appointment.id);
 
       addToast({
         type: 'success',
@@ -270,8 +270,8 @@ export function useCancelAppointment() {
       appointmentApi.cancel(id, reason),
     onSuccess: (appointment) => {
       // Invalidate and refetch appointment queries
-      invalidateQueries.appointments(queryClient);
-      invalidateQueries.appointment(queryClient, appointment.id);
+      invalidateQueries.appointments();
+      invalidateQueries.appointment(appointment.id);
 
       addToast({
         type: 'success',

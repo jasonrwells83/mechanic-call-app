@@ -51,11 +51,12 @@ import {
   PhoneCall,
   UserPlus,
   CarFront,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { useCustomers, useCreateCustomer } from '@/hooks/use-customers';
 import { useVehicles, useCreateVehicle } from '@/hooks/use-vehicles';
-import { useCreateJob, useUpdateJob } from '@/hooks/use-jobs';
+import { useCreateJob, useUpdateJob, useDeleteJob } from '@/hooks/use-jobs';
 import { useCreateCall } from '@/hooks/use-calls';
 import { useUIStore } from '@/stores';
 import { JobStatusTransitionService } from '@/lib/job-status-transitions';
@@ -152,6 +153,7 @@ export function JobForm({
   initialVehicle
 }: JobFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isEditMode = Boolean(job);
 
   // Hooks
@@ -159,6 +161,7 @@ export function JobForm({
   const { data: vehiclesResponse } = useVehicles();
   const { mutateAsync: createJob } = useCreateJob();
   const { mutateAsync: updateJob } = useUpdateJob();
+  const { mutateAsync: deleteJob } = useDeleteJob();
   const { mutateAsync: createCustomer } = useCreateCustomer();
   const { mutateAsync: createVehicle } = useCreateVehicle();
   const { mutateAsync: createCall } = useCreateCall();
@@ -459,7 +462,37 @@ export function JobForm({
 
   const handleClose = () => {
     form.reset();
+    setShowDeleteConfirm(false);
     onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!job?.id) return;
+
+    setIsSubmitting(true);
+    try {
+      await deleteJob(job.id);
+      
+      addToast({
+        type: 'success',
+        title: 'Job Deleted',
+        message: `${job.title} has been deleted successfully`,
+        duration: 3000,
+      });
+
+      setShowDeleteConfirm(false);
+      onClose();
+      form.reset();
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to Delete Job',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+        duration: 5000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1140,28 +1173,87 @@ export function JobForm({
         </Form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleClose}>
-            <X className="h-4 w-4 mr-2" />
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            onClick={form.handleSubmit(handleSubmit)}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin h-4 w-4 mr-2 border-2 border-primary-foreground/20 border-t-primary-foreground rounded-full" />
-                {isEditMode ? 'Updating...' : intakeMode ? 'Completing Intake...' : 'Creating...'}
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                {isEditMode ? 'Update Job' : intakeMode ? 'Complete Call Intake' : 'Create Job'}
-              </>
-            )}
-          </Button>
+          <div className="flex justify-between w-full">
+            <div>
+              {isEditMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={isSubmitting}
+                  className="border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Job
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={handleClose}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                onClick={form.handleSubmit(handleSubmit)}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 mr-2 border-2 border-primary-foreground/20 border-t-primary-foreground rounded-full" />
+                    {isEditMode ? 'Updating...' : intakeMode ? 'Completing Intake...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    {isEditMode ? 'Update Job' : intakeMode ? 'Complete Call Intake' : 'Create Job'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Job</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete "{job?.title}"? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDelete}
+                disabled={isSubmitting}
+                className="border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-600"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 mr-2 border-2 border-primary-foreground/20 border-t-primary-foreground rounded-full" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Job
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
