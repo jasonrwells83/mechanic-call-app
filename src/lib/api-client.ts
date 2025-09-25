@@ -14,8 +14,31 @@ import type {
 } from '@/types/database';
 
 // Base configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || true; // Default to true for frontend-only development
+const DEFAULT_API_PATH = '/api';
+const normalizeApiBaseUrl = (raw?: string) => {
+  if (!raw) {
+    return DEFAULT_API_PATH;
+  }
+
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return DEFAULT_API_PATH;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.pathname === '/' || url.pathname === '') {
+      url.pathname = DEFAULT_API_PATH;
+    }
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    const cleaned = trimmed.replace(/\/+$/, '');
+    return cleaned || DEFAULT_API_PATH;
+  }
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'; // Enable mock fixtures only when explicitly opted in
 
 // Mock data for frontend development
 const mockData = {
@@ -786,3 +809,4 @@ export const api = {
 };
 
 // Individual APIs are already exported above where they are defined
+

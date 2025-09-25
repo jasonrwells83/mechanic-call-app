@@ -1,8 +1,8 @@
-# Mechanic Shop OS
+﻿# Mechanic Shop OS
 
 Modern, operator-first shop management system designed specifically for 2-bay automotive repair shops.
 
-## 🚀 Features
+## ðŸš€ Features
 
 - **Calendar Scheduling**: Drag-and-drop scheduling with 2-bay resource management
 - **Job Management**: Kanban-style workflow from intake to completion
@@ -11,7 +11,7 @@ Modern, operator-first shop management system designed specifically for 2-bay au
 - **Real-time Updates**: Powered by InstantDB for live synchronization
 - **Keyboard-First**: Extensive keyboard shortcuts for operator efficiency
 
-## 🛠 Tech Stack
+## ðŸ›  Tech Stack
 
 ### Frontend
 - **React 18** with TypeScript
@@ -27,13 +27,13 @@ Modern, operator-first shop management system designed specifically for 2-bay au
 - **InstantDB** for real-time database
 - **CORS** enabled for frontend communication
 
-## 📋 Prerequisites
+## ðŸ“‹ Prerequisites
 
 - Node.js 18+ 
 - npm or yarn
 - InstantDB account (free tier available)
 
-## 🚀 Quick Start
+## ðŸš€ Quick Start
 
 ### 1. Clone and Install
 ```bash
@@ -47,6 +47,7 @@ npm run setup
 2. Create new app: "Mechanic Shop OS"
 3. Get your App ID and Admin Token
 4. Follow setup guide in `INSTANTDB_SETUP.md`
+5. Set `VITE_USE_MOCK_DATA=false` in `.env.local` when you want the frontend to use live API data (omit or set to `true` to fall back to mock fixtures).
 
 ### 3. Run Development Servers
 ```bash
@@ -58,31 +59,39 @@ npm run dev          # Frontend only (port 5174)
 npm run dev:backend  # Backend only (port 3001)
 ```
 
-### 4. Access the Application
+### 4. Seed Canonical Data
+Once your environment variables are in place, populate InstantDB with the shared dataset so the frontend resolves live entities:
+```bash
+cd server
+npm run seed
+```
+The seed script is idempotent and will upsert customers, vehicles, jobs, calls, appointments, and shop settings.
+
+### 5. Access the Application
 - **Frontend**: http://localhost:5174
 - **Backend API**: http://localhost:3001
 - **Health Check**: http://localhost:3001/health
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
 mechanic-shop-os/
-├── src/                    # Frontend source
-│   ├── components/         # React components
-│   ├── hooks/             # Custom hooks
-│   ├── stores/            # Zustand stores
-│   └── types/             # TypeScript types
-├── server/                # Backend source
-│   ├── src/
-│   │   ├── config/        # Database & app config
-│   │   ├── routes/        # API routes
-│   │   └── types/         # Backend types
-│   └── dist/              # Built backend
-├── tasks/                 # Project documentation
-└── public/                # Static assets
+â”œâ”€â”€ src/                    # Frontend source
+â”‚   â”œâ”€â”€ components/         # React components
+â”‚   â”œâ”€â”€ hooks/             # Custom hooks
+â”‚   â”œâ”€â”€ stores/            # Zustand stores
+â”‚   â””â”€â”€ types/             # TypeScript types
+â”œâ”€â”€ server/                # Backend source
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ config/        # Database & app config
+â”‚   â”‚   â”œâ”€â”€ routes/        # API routes
+â”‚   â”‚   â””â”€â”€ types/         # Backend types
+â”‚   â””â”€â”€ dist/              # Built backend
+â”œâ”€â”€ tasks/                 # Project documentation
+â””â”€â”€ public/                # Static assets
 ```
 
-## 🔧 Development Scripts
+## ðŸ”§ Development Scripts
 
 ```bash
 npm run dev          # Start frontend dev server
@@ -94,7 +103,7 @@ npm run setup        # Install all dependencies
 npm run lint         # Run ESLint
 ```
 
-## 🎯 Roadmap
+## ðŸŽ¯ Roadmap
 
 ### Phase 1 (MVP) - Current
 - [x] Project setup & infrastructure
@@ -113,7 +122,7 @@ npm run lint         # Run ESLint
 - [ ] File uploads
 - [ ] Advanced search/filtering
 
-## 🤝 Contributing
+## ðŸ¤ Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -121,11 +130,11 @@ npm run lint         # Run ESLint
 4. Run tests and linting
 5. Submit a pull request
 
-## 📄 License
+## ðŸ“„ License
 
 MIT License - see LICENSE file for details
 
-## 🆘 Support
+## ðŸ†˜ Support
 
 - Check `INSTANTDB_SETUP.md` for database setup
 - Review task list in `tasks/tasks-prd-mechanic-shop-os.md`

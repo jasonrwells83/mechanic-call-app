@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+﻿import { Router, Request, Response } from 'express';
 import { databaseService } from '../services/database';
 import { ShopSettings } from '../types/database';
 
@@ -62,7 +62,7 @@ router.get('/business-hours', async (req: Request, res: Response) => {
     
     res.json({
       success: true,
-      data: settings.businessHours,
+      data: settings.hours,
     });
   } catch (error) {
     console.error('Error fetching business hours:', error);
@@ -87,7 +87,7 @@ router.get('/bay-names', async (req: Request, res: Response) => {
     
     res.json({
       success: true,
-      data: settings.bayNames,
+      data: settings.bays,
     });
   } catch (error) {
     console.error('Error fetching bay names:', error);
@@ -112,7 +112,7 @@ router.get('/status-colors', async (req: Request, res: Response) => {
     
     res.json({
       success: true,
-      data: settings.statusColors,
+      data: settings.statusPalettes,
     });
   } catch (error) {
     console.error('Error fetching status colors:', error);

@@ -3,18 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Calendar, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Calendar,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
   Plus,
   Car,
   Users
 } from 'lucide-react';
+import { JobForm } from '@/components/forms/JobForm';
+import { useUIStore } from '@/stores';
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { openModal, closeModal, activeModal } = useUIStore();
   // Mock data for today's KPIs
   const todayStats = {
     carsToday: 8,
@@ -54,15 +57,15 @@ export function HomePage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Today's Overview</h1>
           <p className="text-muted-foreground">
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
             })}
           </p>
         </div>
-        <Button>
+        <Button onClick={() => openModal('create-job')}>
           <Plus className="h-4 w-4 mr-2" />
           New Job
         </Button>
@@ -164,6 +167,12 @@ export function HomePage() {
           </div>
         </CardContent>
       </Card>
+
+      <JobForm
+        isOpen={activeModal === 'create-job'}
+        onClose={closeModal}
+        initialStatus="incoming-call"
+      />
     </div>
   );
 }

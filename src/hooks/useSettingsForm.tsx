@@ -289,7 +289,6 @@ export const SettingsFormProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     loadSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateHours = (updater: (prev: ShopHoursSettings) => ShopHoursSettings) => {

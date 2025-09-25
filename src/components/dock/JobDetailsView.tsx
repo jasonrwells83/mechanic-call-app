@@ -74,7 +74,7 @@ const NOTE_TYPES: Array<{ value: NonNullable<JobNote['type']>; label: string }> 
   { value: 'internal', label: 'Internal' },
 ];
 
-const INVOICE_PATTERN = /^[A-Za-z0-9\-\/]{1,20}$/;
+const INVOICE_PATTERN = /^[-/A-Za-z0-9]{1,20}$/;
 
 export function JobDetailsView({
   jobId,
