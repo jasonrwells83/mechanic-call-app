@@ -9,6 +9,7 @@ import jobRoutes from './jobs';
 import appointmentRoutes from './appointments';
 import callRoutes from './calls';
 import settingsRoutes from './settings';
+import dashboardRoutes from './dashboard';
 
 const router = Router();
 
@@ -65,5 +66,8 @@ router.use('/jobs', jobRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/calls', callRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;
+
+

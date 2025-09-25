@@ -175,6 +175,7 @@ export function CustomerForm({ isOpen, onClose, customer }: CustomerFormProps) {
           phone: data.phone,
           email: data.email || undefined,
           address: data.address || undefined,
+          preferredContact: data.preferredContactMethod || 'phone',
         };
 
         await createCustomer(createData);

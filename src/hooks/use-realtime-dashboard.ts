@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { realtimeManager } from '@/lib/realtime-client';
 import { queryKeys } from '@/lib/query-client';
-import type { Job, Call, Appointment, DashboardStats } from '@/types/database';
+import type { Job, Call, Appointment, DashboardStats, DashboardScheduleEntry } from '@/types/database';
 
 // Hook for real-time dashboard statistics
 export function useRealtimeDashboard(dateRange?: { start: string; end: string }) {
@@ -57,6 +57,22 @@ export function useRealtimeDashboard(dateRange?: { start: string; end: string })
         new Date(apt.startAt).toDateString() === todayStr
       );
 
+      const jobsById = new Map(currentJobs.map((job: Job) => [job.id, job] as const));
+      const scheduleEntries: DashboardScheduleEntry[] = todaysAppointments
+        .slice()
+        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+        .map((appointment: Appointment) => {
+          const job = jobsById.get(appointment.jobId);
+          return {
+            appointmentId: appointment.id,
+            jobId: appointment.jobId,
+            jobTitle: job?.title,
+            status: job?.status,
+            bay: appointment.bay,
+            startAt: appointment.startAt,
+            endAt: appointment.endAt,
+          };
+        });
       const todaysCalls = currentCalls.filter((call: Call) => 
         new Date(call.createdAt).toDateString() === todayStr
       );
@@ -90,6 +106,7 @@ export function useRealtimeDashboard(dateRange?: { start: string; end: string })
             : 0,
           customerSatisfaction: 0, // Would come from feedback system
         },
+        todaySchedule: scheduleEntries,
       };
 
       // Update dashboard cache

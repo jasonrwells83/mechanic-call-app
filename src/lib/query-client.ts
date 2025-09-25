@@ -131,8 +131,9 @@ export const queryKeys = {
   // Dashboard/Reports
   dashboard: {
     all: ['dashboard'] as const,
-    stats: () => [...queryKeys.dashboard.all, 'stats'] as const,
-    kpis: (dateRange?: { start: string; end: string }) => 
+    stats: (dateRange?: { start: string; end: string }) =>
+      [...queryKeys.dashboard.all, 'stats', dateRange ?? 'today'] as const,
+    kpis: (dateRange?: { start: string; end: string }) =>
       [...queryKeys.dashboard.all, 'kpis', dateRange] as const,
   },
 } as const;
@@ -275,4 +276,5 @@ export const backgroundSync = {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
   },
 };
+
 

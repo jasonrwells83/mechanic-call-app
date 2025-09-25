@@ -1,4 +1,4 @@
-﻿// Frontend TypeScript types for Mechanic Shop OS
+// Frontend TypeScript types for Mechanic Shop OS
 // Based on PRD requirements and InstantDB schema
 
 export interface Customer {
@@ -361,6 +361,23 @@ export interface ShopSettings {
 }
 
 // Dashboard/KPI types
+export interface DashboardScheduleEntry {
+  appointmentId: string;
+  jobId: string;
+  jobTitle?: string;
+  status?: JobStatus;
+  bay: Bay;
+  startAt: string;
+  endAt: string;
+  customerName?: string;
+  vehicle?: {
+    year?: number;
+    make?: string;
+    model?: string;
+    licensePlate?: string;
+  };
+}
+
 export interface DashboardStats {
   today: {
     carsScheduled: number;
@@ -375,8 +392,8 @@ export interface DashboardStats {
     averageJobTime: number;
     customerSatisfaction?: number;
   };
+  todaySchedule: DashboardScheduleEntry[];
 }
-
 // Export utilities
 export interface ExportOptions {
   format: 'csv' | 'pdf';
@@ -387,3 +404,4 @@ export interface ExportOptions {
   includeFields: string[];
   filters?: JobFilters | CustomerFilters | CallFilters;
 }
+

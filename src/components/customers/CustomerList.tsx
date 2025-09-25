@@ -26,6 +26,15 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Search,
   Filter,
   MoreHorizontal,
@@ -44,10 +53,11 @@ import {
   Star,
   Clock,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCustomers } from '@/hooks/use-customers';
+import { useCustomers, useDeleteCustomer } from '@/hooks/use-customers';
 import { useJobs } from '@/hooks/use-jobs';
 import { useVehicles } from '@/hooks/use-vehicles';
 import { AdvancedCustomerSearch } from '@/components/search/AdvancedCustomerSearch';
@@ -113,11 +123,16 @@ export function CustomerList({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'new' | 'vip'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'totalSpent' | 'lastVisit' | 'jobCount'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Fetch data
   const { data: customersResponse, isLoading: customersLoading } = useCustomers();
   const { data: jobsResponse } = useJobs();
   const { data: vehiclesResponse } = useVehicles();
+
+  // Delete customer mutation
+  const deleteCustomerMutation = useDeleteCustomer();
 
   const customers = customersResponse?.data || [];
   const jobs = jobsResponse?.data || [];
@@ -237,7 +252,29 @@ export function CustomerList({
         // Handle archive action
         console.log('Archive customer:', customer.id);
         break;
+      case 'delete':
+        setCustomerToDelete(customer);
+        setShowDeleteDialog(true);
+        break;
     }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!customerToDelete) return;
+    
+    try {
+      await deleteCustomerMutation.mutateAsync(customerToDelete.id);
+      setShowDeleteDialog(false);
+      setCustomerToDelete(null);
+    } catch (error) {
+      // Error is handled by the mutation hook
+      console.error('Delete failed:', error);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteDialog(false);
+    setCustomerToDelete(null);
   };
 
   if (customersLoading) {
@@ -537,10 +574,20 @@ export function CustomerList({
                                 e.stopPropagation();
                                 handleCustomerAction(customer, 'archive');
                               }}
-                              className="text-red-600"
+                              className="text-orange-600"
                             >
                               <Archive className="mr-2 h-4 w-4" />
                               Archive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCustomerAction(customer, 'delete');
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -573,6 +620,59 @@ export function CustomerList({
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Customer</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{customerToDelete?.name}</strong>? 
+              This action cannot be undone and will permanently remove the customer 
+              and all associated data from the system.
+              {customerToDelete && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <div className="text-sm text-red-800">
+                    <strong>This will also delete:</strong>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      <li>All customer vehicles</li>
+                      <li>All service history and jobs</li>
+                      <li>All communication records</li>
+                      <li>All appointments and scheduling data</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={handleDeleteCancel}
+              disabled={deleteCustomerMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteConfirm}
+              disabled={deleteCustomerMutation.isPending}
+            >
+              {deleteCustomerMutation.isPending ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Customer
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

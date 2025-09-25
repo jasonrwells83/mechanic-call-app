@@ -242,6 +242,39 @@ export interface ShopSettings {
   updatedAt: string;
 }
 
+export interface DashboardScheduleEntry {
+  appointmentId: string;
+  jobId: string;
+  jobTitle?: string;
+  status?: JobStatus;
+  bay: Bay;
+  startAt: string;
+  endAt: string;
+  customerName?: string;
+  vehicle?: {
+    year?: number;
+    make?: string;
+    model?: string;
+    licensePlate?: string;
+  };
+}
+
+export interface DashboardStats {
+  today: {
+    carsScheduled: number;
+    hoursBooked: number;
+    totalCapacity: number;
+    waitingOnParts: number;
+    completed: number;
+  };
+  thisWeek: {
+    jobsCompleted: number;
+    totalRevenue?: number;
+    averageJobTime: number;
+    customerSatisfaction?: number;
+  };
+  todaySchedule: DashboardScheduleEntry[];
+}
 export const instantDBSchema = {
   entities: {
     customers: {
@@ -397,4 +430,5 @@ export const isValidPreferredContact = (contact: string): contact is PreferredCo
 export const isValidInvoiceNumber = (value: string): boolean => {
   return /^[A-Za-z0-9/-]{1,20}$/.test(value);
 };
+
 
