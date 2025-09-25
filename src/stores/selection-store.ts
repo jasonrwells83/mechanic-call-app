@@ -93,6 +93,27 @@ const createInitialHistory = (): SelectionHistory => ({
   maxItems: MAX_HISTORY_ITEMS,
 });
 
+const upsertWithLimit = (
+  items: SelectionItem[],
+  item: SelectionItem,
+  limit?: number,
+): SelectionItem[] => {
+  const existingIndex = items.findIndex((existing) => existing.id === item.id && existing.type === item.type);
+  const nextItems = [...items];
+
+  if (existingIndex >= 0) {
+    nextItems.splice(existingIndex, 1);
+  }
+
+  nextItems.unshift(item);
+
+  if (typeof limit === 'number' && nextItems.length > limit) {
+    return nextItems.slice(0, limit);
+  }
+
+  return nextItems;
+};
+
 export const useSelectionStore = create<SelectionState>()(
   persist(
     (set, get) => ({
@@ -108,7 +129,9 @@ export const useSelectionStore = create<SelectionState>()(
 
       // Selection Actions
       selectItem: (item) => {
-        if (!get().canSelectType(item.type)) {
+        const state = get();
+
+        if (!state.canSelectType(item.type)) {
           return;
         }
 
@@ -117,32 +140,35 @@ export const useSelectionStore = create<SelectionState>()(
           timestamp: new Date(),
         };
 
-        const context = get().getContextFromType(item.type);
+        const context = state.getContextFromType(item.type);
+        const isSameSelection =
+          state.currentSelection?.id === item.id && state.currentSelection.type === item.type;
 
-        set((state) => {
-          const isSameSelection =
-            state.currentSelection?.id === item.id && state.currentSelection.type === item.type;
+        const nextHistoryItems = isSameSelection
+          ? state.history.items
+          : upsertWithLimit(state.history.items, fullItem, state.history.maxItems);
 
-          const nextState = {
-            ...state,
-            currentSelection: fullItem,
-            dockContext: context,
-            dockData: item.data,
-            dockView: 'context' as DockView,
-            dockPayload: {
-              entityType: item.type,
-              entityId: item.id,
-              initialData: item.data,
-            },
-            isDockOpen: true,
-          };
+        const nextRecentItems = isSameSelection
+          ? state.recentItems
+          : upsertWithLimit(state.recentItems, fullItem, MAX_RECENT_ITEMS);
 
-          if (!isSameSelection) {
-            get().addToHistory(fullItem);
-            get().addToRecent(fullItem);
-          }
-
-          return nextState;
+        set({
+          ...state,
+          currentSelection: fullItem,
+          dockContext: context,
+          dockData: item.data,
+          dockView: 'context',
+          dockPayload: {
+            entityType: item.type,
+            entityId: item.id,
+            initialData: item.data,
+          },
+          isDockOpen: true,
+          history: {
+            ...state.history,
+            items: nextHistoryItems,
+          },
+          recentItems: nextRecentItems,
         });
       },
 
@@ -236,30 +262,13 @@ export const useSelectionStore = create<SelectionState>()(
 
       // History Management
       addToHistory: (item) => {
-        set((state) => {
-          const existingIndex = state.history.items.findIndex(
-            (h) => h.id === item.id && h.type === item.type,
-          );
-          let newItems = [...state.history.items];
-
-          if (existingIndex >= 0) {
-            newItems.splice(existingIndex, 1);
-          }
-
-          newItems.unshift(item);
-
-          if (newItems.length > state.history.maxItems) {
-            newItems = newItems.slice(0, state.history.maxItems);
-          }
-
-          return {
-            ...state,
-            history: {
-              ...state.history,
-              items: newItems,
-            },
-          };
-        });
+        set((state) => ({
+          ...state,
+          history: {
+            ...state.history,
+            items: upsertWithLimit(state.history.items, item, state.history.maxItems),
+          },
+        }));
       },
 
       clearHistory: () => {
@@ -284,27 +293,10 @@ export const useSelectionStore = create<SelectionState>()(
 
       // Recent Items
       addToRecent: (item) => {
-        set((state) => {
-          const existingIndex = state.recentItems.findIndex(
-            (recent) => recent.id === item.id && recent.type === item.type,
-          );
-          let newRecent = [...state.recentItems];
-
-          if (existingIndex >= 0) {
-            newRecent.splice(existingIndex, 1);
-          }
-
-          newRecent.unshift(item);
-
-          if (newRecent.length > MAX_RECENT_ITEMS) {
-            newRecent = newRecent.slice(0, MAX_RECENT_ITEMS);
-          }
-
-          return {
-            ...state,
-            recentItems: newRecent,
-          };
-        });
+        set((state) => ({
+          ...state,
+          recentItems: upsertWithLimit(state.recentItems, item, MAX_RECENT_ITEMS),
+        }));
       },
 
       clearRecent: () => {

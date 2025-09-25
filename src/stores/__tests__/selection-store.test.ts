@@ -51,6 +51,24 @@ describe('selection store dock transitions', () => {
       entityId: 'job-123',
       initialData: { title: 'Test Entity' },
     });
+    expect(state.history.items).toHaveLength(1);
+    expect(state.history.items[0]?.id).toBe('job-123');
+    expect(state.recentItems).toHaveLength(1);
+    expect(state.recentItems[0]?.id).toBe('job-123');
+  });
+
+  it('does not duplicate history or recent entries for the same selection', () => {
+    const { selectItem } = useSelectionStore.getState();
+
+    const firstSelection = buildSelection({ id: 'job-123', type: 'job' });
+    selectItem(firstSelection);
+    selectItem(firstSelection);
+    selectItem(buildSelection({ id: 'job-456', type: 'job' }));
+
+    const state = useSelectionStore.getState();
+
+    expect(state.history.items.map((item) => item.id)).toEqual(['job-456', 'job-123']);
+    expect(state.recentItems.map((item) => item.id)).toEqual(['job-456', 'job-123']);
   });
 
   it('showMenu switches the dock back to menu view without closing it', () => {
