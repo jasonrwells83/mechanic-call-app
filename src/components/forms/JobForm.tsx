@@ -62,7 +62,7 @@ import { JobStatusTransitionService } from '@/lib/job-status-transitions';
 import { GlobalCustomerSearch } from '@/components/search/GlobalCustomerSearch';
 import type { Job, JobStatus, JobPriority, CreateJobData, UpdateJobData, Customer, Vehicle, CreateCustomerData, CreateVehicleData, CreateCallData } from '@/types/database';
 
-const invoiceNumberPattern = /^[A-Za-z0-9\-\/]{1,20}$/;
+const invoiceNumberPattern = /^[-/A-Za-z0-9]{1,20}$/;
 
 // Form validation schema
 const jobFormSchema = z.object({
