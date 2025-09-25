@@ -5,7 +5,7 @@ import { init } from '@instantdb/react';
 import { queryClient, backgroundSync } from './query-client';
 
 // Environment variables
-const APP_ID = import.meta.env.VITE_INSTANT_APP_ID;
+const APP_ID = import.meta.env.VITE_INSTANT_DB_APP_ID;
 
 // Validate APP_ID format (must be a valid UUID)
 const isValidUUID = (str: string) => {
@@ -16,11 +16,11 @@ const isValidUUID = (str: string) => {
 const isValidAppId = APP_ID && APP_ID !== 'your_app_id_here' && isValidUUID(APP_ID);
 
 if (!APP_ID || APP_ID === 'your_app_id_here') {
-  console.warn('VITE_INSTANT_APP_ID not configured. Real-time features will be disabled.');
-  console.info('To enable InstantDB, set a valid UUID in your .env file for VITE_INSTANT_APP_ID');
+  console.warn('VITE_INSTANT_DB_APP_ID not configured. Real-time features will be disabled.');
+  console.info('To enable InstantDB, set a valid UUID in your .env file for VITE_INSTANT_DB_APP_ID');
 } else if (!isValidAppId) {
-  console.warn('VITE_INSTANT_APP_ID is not a valid UUID. Real-time features will be disabled.');
-  console.info('Please check your .env file and ensure VITE_INSTANT_APP_ID is a valid UUID format');
+  console.warn('VITE_INSTANT_DB_APP_ID is not a valid UUID. Real-time features will be disabled.');
+  console.info('Please check your .env file and ensure VITE_INSTANT_DB_APP_ID is a valid UUID format');
 }
 
 // Initialize InstantDB for frontend use only if we have a valid app ID

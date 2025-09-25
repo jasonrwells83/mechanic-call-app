@@ -48,11 +48,11 @@ app.get('/api', (req: Request, res: Response) => {
   });
 });
 
-// 404 handler
-app.use('*', (req: Request, res: Response) => {
-  res.status(404).json({ 
+// 404 handler - express@5 no longer accepts '*' patterns, so use a catch-all middleware
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
     error: 'Endpoint not found',
-    path: req.originalUrl 
+    path: req.originalUrl
   });
 });
 

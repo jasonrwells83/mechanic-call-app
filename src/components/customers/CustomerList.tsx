@@ -159,7 +159,7 @@ export function CustomerList({
 
   // Filter and sort customers
   const filteredAndSortedCustomers = useMemo(() => {
-    let filtered = customerStats.filter(customer => {
+    const filtered = customerStats.filter(customer => {
       const matchesSearch = !searchQuery || 
         customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
