@@ -9,13 +9,17 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const filters: CustomerQueryFilters = {
       search: req.query.search as string,
-      preferredContact: req.query.preferredContact ? 
-        (req.query.preferredContact as string).split(',') as ('phone' | 'email')[] : 
+      preferredContact: req.query.preferredContact ?
+        (req.query.preferredContact as string).split(',') as ('phone' | 'email')[] :
         undefined,
-      hasActiveJobs: req.query.hasActiveJobs === 'true',
       limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
       offset: req.query.offset ? parseInt(req.query.offset as string) : undefined,
     };
+
+    const hasActiveJobsParam = req.query.hasActiveJobs;
+    if (typeof hasActiveJobsParam === 'string') {
+      filters.hasActiveJobs = hasActiveJobsParam === 'true';
+    }
 
     const customers = await databaseService.getAllCustomers(filters);
     

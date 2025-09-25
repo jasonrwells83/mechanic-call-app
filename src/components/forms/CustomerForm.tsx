@@ -56,7 +56,7 @@ const customerFormSchema = z.object({
   alternatePhone: z.string().optional(),
   company: z.string().optional(),
   // Preferences and notes
-  preferredContactMethod: z.enum(['phone', 'email', 'text']).optional(),
+  preferredContactMethod: z.enum(['phone', 'email']).default('phone'),
   notes: z.string().optional(),
   // Emergency contact
   emergencyContactName: z.string().optional(),
@@ -118,7 +118,7 @@ export function CustomerForm({ isOpen, onClose, customer }: CustomerFormProps) {
         address: customer.address || '',
         alternatePhone: '',
         company: '',
-        preferredContactMethod: 'phone',
+        preferredContactMethod: customer.preferredContact ?? 'phone',
         notes: '',
         emergencyContactName: '',
         emergencyContactPhone: '',
@@ -733,3 +733,6 @@ export function CustomerForm({ isOpen, onClose, customer }: CustomerFormProps) {
 }
 
 export type { CustomerFormProps };
+
+
+
