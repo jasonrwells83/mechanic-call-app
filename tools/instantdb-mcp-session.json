@@ -1,0 +1,30 @@
+{
+  "client": {
+    "redirect_uris": [
+      "http://127.0.0.1:48271/callback"
+    ],
+    "token_endpoint_auth_method": "client_secret_post",
+    "grant_types": [
+      "authorization_code",
+      "refresh_token"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "client_name": "Mechanic Shop OS MCP CLI",
+    "scope": "apps-read apps-write",
+    "client_id": "948bd944-f69e-46f5-876e-415daf1c88f6",
+    "client_secret": "bf392472d14b459e16c8a41d94338a09cc9a75d905c356e429956d29f1991d9f",
+    "client_id_issued_at": 1758769208,
+    "client_secret_expires_at": 1761361208
+  },
+  "codeVerifier": "5heisuKEhcT0L7WagnKf7I~ive~hp5mn9A9BSm1ZVA_",
+  "tokens": {
+    "access_token": "at_9aa1ce6e-0a4c-4c61-a372-209a241bede2",
+    "token_type": "bearer",
+    "expires_in": 1205968,
+    "scope": "apps-read apps-write",
+    "refresh_token": "rt_af7fa965-4929-44b5-b20b-5c826199b0be",
+    "expires_at": 1759975244434
+  }
+}

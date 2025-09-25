@@ -71,7 +71,7 @@ const jobFormSchema = z.object({
   vehicleId: z.string().optional(),
   estHours: z.number().min(0.5, 'Minimum 0.5 hours').max(40, 'Maximum 40 hours'),
   priority: z.enum(['low', 'medium', 'high']),
-  status: z.enum(['intake', 'scheduled', 'in-progress', 'waiting-parts', 'completed']),
+  status: z.enum(['intake', 'incoming-call', 'scheduled', 'in-progress', 'in-bay', 'waiting-parts', 'completed']),
   notes: z.string().optional(),
   invoiceNumber: z.union([z.string().regex(invoiceNumberPattern, 'Use 1-20 characters: letters, numbers, dash, or slash.'), z.literal('')]).optional(),
   
@@ -351,6 +351,7 @@ export function JobForm({
             phone: data.customerPhone,
             email: data.customerEmail || undefined,
             address: data.customerAddress || undefined,
+            preferredContact: data.customerEmail ? 'email' : 'phone',
           };
 
           const customerResponse = await createCustomer(customerData);
@@ -1167,3 +1168,4 @@ export function JobForm({
 }
 
 export type { JobFormProps };
+

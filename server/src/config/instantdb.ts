@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
-import { init } from '@instantdb/admin';
+import { init, id as generateInstantId } from '@instantdb/admin';
 import { instantDBSchema } from '../types/database';
+
 dotenv.config();
 
 // Environment variables validation
@@ -8,6 +9,108 @@ const APP_ID = process.env.INSTANT_DB_APP_ID;
 const ADMIN_TOKEN = process.env.INSTANT_DB_ADMIN_TOKEN;
 
 const isConfigured = Boolean(APP_ID && ADMIN_TOKEN);
+
+type ValueType = 'string' | 'number' | 'boolean' | 'date' | 'json';
+
+type AdminAttribute = {
+  valueType: ValueType;
+  required: boolean;
+  isIndexed: boolean;
+  config: {
+    indexed: boolean;
+    unique: boolean;
+  };
+};
+
+type AdminLink = {
+  entityName: string;
+  cardinality: 'one' | 'many';
+};
+
+type AdminSchema = {
+  entities: Record<string, { attrs: Record<string, AdminAttribute>; links: Record<string, AdminLink> }>;
+  links: Record<string, {
+    from: { entity: string; has: 'one' | 'many'; label: string };
+    to: { entity: string; has: 'one' | 'many'; label: string };
+  }>;
+};
+
+const parseAttributeDefinition = (definition: string): { valueType: ValueType; required: boolean } => {
+  const optional = definition.endsWith('?');
+  const base = optional ? definition.slice(0, -1) : definition;
+  const allowed: ValueType[] = ['string', 'number', 'boolean', 'date', 'json'];
+  const valueType = allowed.includes(base as ValueType) ? (base as ValueType) : 'string';
+  return {
+    valueType,
+    required: !optional,
+  };
+};
+
+const buildAdminSchema = (schema: typeof instantDBSchema): AdminSchema => {
+  const entities: AdminSchema['entities'] = {};
+
+  for (const [entityName, attributes] of Object.entries(schema.entities)) {
+    const attrDefs: Record<string, AdminAttribute> = {};
+    for (const [attrName, definition] of Object.entries(attributes)) {
+      const { valueType, required } = parseAttributeDefinition(definition as string);
+      attrDefs[attrName] = {
+        valueType,
+        required,
+        isIndexed: false,
+        config: {
+          indexed: false,
+          unique: false,
+        },
+      };
+    }
+
+    entities[entityName] = {
+      attrs: attrDefs,
+      links: {},
+    };
+  }
+
+  const links: AdminSchema['links'] = {};
+
+  for (const [linkName, linkDef] of Object.entries(schema.links ?? {})) {
+    const forward = linkDef.forward;
+    const reverse = linkDef.reverse;
+
+    links[linkName] = {
+      from: {
+        entity: forward.on,
+        has: forward.has,
+        label: forward.label,
+      },
+      to: {
+        entity: reverse.on,
+        has: reverse.has,
+        label: reverse.label,
+      },
+    };
+
+    const forwardEntity = entities[forward.on];
+    const reverseEntity = entities[reverse.on];
+
+    if (forwardEntity) {
+      forwardEntity.links[forward.label] = {
+        entityName: reverse.on,
+        cardinality: forward.has as 'one' | 'many',
+      };
+    }
+
+    if (reverseEntity) {
+      reverseEntity.links[reverse.label] = {
+        entityName: forward.on,
+        cardinality: reverse.has as 'one' | 'many',
+      };
+    }
+  }
+
+  return { entities, links };
+};
+
+const adminSchema = buildAdminSchema(instantDBSchema);
 
 const createDisabledDbProxy = (path: string[] = []) => new Proxy(() => {}, {
   get: (_, property) => {
@@ -39,7 +142,7 @@ export const db = (
     ? init({
       appId: APP_ID!,
       adminToken: ADMIN_TOKEN!,
-      schema: instantDBSchema as any,
+      schema: adminSchema as any,
     })
     : createDisabledDbProxy()
 ) as any;
@@ -48,7 +151,7 @@ export const db = (
 export const instantDBConfig = {
   appId: APP_ID ?? '',
   isConfigured,
-  schema: instantDBSchema as any,
+  schema: adminSchema as any,
 };
 
 // Database relationships and constraints
@@ -96,9 +199,8 @@ export const relationships = {
 
 // Helper function to generate unique IDs
 export const generateId = (prefix: string): string => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${prefix}-${timestamp}-${random}`;
+  void prefix;
+  return generateInstantId();
 };
 
 // Helper function to get current timestamp
@@ -107,9 +209,9 @@ export const getCurrentTimestamp = (): string => {
 };
 
 if (isConfigured) {
-  console.log('📊 InstantDB initialized with app ID:', `${APP_ID!.substring(0, 8)}...`);
-  console.log('🔗 Database relationships configured:', Object.keys(relationships).length);
+  console.log('dY"S InstantDB initialized with app ID:', `${APP_ID!.substring(0, 8)}...`);
+  console.log('dY"- Database relationships configured:', Object.keys(relationships).length);
 } else {
-  console.warn('⚠️ InstantDB credentials not found. Set INSTANT_DB_APP_ID and INSTANT_DB_ADMIN_TOKEN to enable database access.');
+  console.warn('?s??,? InstantDB credentials not found. Set INSTANT_DB_APP_ID and INSTANT_DB_ADMIN_TOKEN to enable database access.');
 }
 

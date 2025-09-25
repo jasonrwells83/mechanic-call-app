@@ -147,6 +147,15 @@ export interface JobQueryFilters {
   offset?: number;
 }
 
+export interface VehicleQueryFilters {
+  customerId?: string;
+  ids?: string[];
+  make?: string;
+  model?: string;
+  year?: number;
+  search?: string;
+}
+
 export interface CustomerQueryFilters {
   search?: string;
   preferredContact?: PreferredContact[];
@@ -388,3 +397,4 @@ export const isValidPreferredContact = (contact: string): contact is PreferredCo
 export const isValidInvoiceNumber = (value: string): boolean => {
   return /^[A-Za-z0-9/-]{1,20}$/.test(value);
 };
+

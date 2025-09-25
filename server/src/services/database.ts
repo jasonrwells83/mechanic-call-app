@@ -30,6 +30,7 @@ import {
   UpdateJobRequest,
   UpdateVehicleRequest,
   Vehicle,
+  VehicleQueryFilters,
   isValidBay,
   isValidCallOutcome,
   isValidInvoiceNumber,
@@ -258,6 +259,52 @@ export class DatabaseService {
   async getVehicle(id: string): Promise<Vehicle | null> {
     const result = await db.query({ vehicles: { $: { where: { id } } } });
     return (result.vehicles?.[0] as Vehicle) ?? null;
+  }
+
+  async getAllVehicles(filters: VehicleQueryFilters = {}): Promise<Vehicle[]> {
+    const result = await db.query({ vehicles: {} });
+    let vehicles: Vehicle[] = ((result.vehicles as Vehicle[] | undefined) ?? []).map((vehicle) => ({
+      ...vehicle,
+    }));
+
+    if (filters.ids?.length) {
+      const allowedIds = new Set(filters.ids);
+      vehicles = vehicles.filter((vehicle) => allowedIds.has(vehicle.id));
+    }
+
+    if (filters.customerId) {
+      vehicles = vehicles.filter((vehicle) => vehicle.customerId === filters.customerId);
+    }
+
+    if (filters.make) {
+      const make = filters.make.toLowerCase();
+      vehicles = vehicles.filter((vehicle) => vehicle.make.toLowerCase() === make);
+    }
+
+    if (filters.model) {
+      const model = filters.model.toLowerCase();
+      vehicles = vehicles.filter((vehicle) => vehicle.model.toLowerCase() === model);
+    }
+
+    if (typeof filters.year === 'number') {
+      vehicles = vehicles.filter((vehicle) => vehicle.year === filters.year);
+    }
+
+    if (filters.search) {
+      const term = filters.search.toLowerCase();
+      vehicles = vehicles.filter((vehicle) => {
+        return [
+          vehicle.make,
+          vehicle.model,
+          vehicle.licensePlate,
+          vehicle.vin,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLowerCase().includes(term));
+      });
+    }
+
+    return vehicles.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
   async getVehiclesByCustomer(customerId: string): Promise<Vehicle[]> {
@@ -705,3 +752,4 @@ export class DatabaseService {
 }
 
 export const databaseService = new DatabaseService();
+

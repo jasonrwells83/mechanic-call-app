@@ -13,8 +13,22 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+const defaultAllowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+const envOriginList = process.env.FRONTEND_URLS
+  ? process.env.FRONTEND_URLS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : [];
+const singleFrontEndOrigin = process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [];
+const allowedOrigins = Array.from(new Set([...envOriginList, ...singleFrontEndOrigin, ...defaultAllowedOrigins]));
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5174',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn('Blocked CORS origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());
