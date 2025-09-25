@@ -1,37 +1,25 @@
-# InstantDB Setup Guide
+﻿# InstantDB Setup Guide
 
-To complete Task 1.5, you need to set up InstantDB and get your app credentials. Follow these steps:
+Follow this guide to connect the Mechanic Shop OS stack to your InstantDB application and populate it with canonical data.
 
-## Step 1: Create InstantDB Account
+## 1. Create Your InstantDB App
 
-1. Go to [https://instantdb.com/](https://instantdb.com/)
-2. Sign up for a free account
-3. Verify your email if required
+1. Visit [https://instantdb.com/](https://instantdb.com/)
+2. Create an account or sign in
+3. From the dashboard, choose **Create App** / **New Project** and name it **Mechanic Shop OS**
+4. Open the new app and note the **App ID** and **Admin Token** (sometimes called "Server Token")
 
-## Step 2: Create a New App
+## 2. Configure Environment Variables
 
-1. After logging in, click "Create App" or "New Project"
-2. Name your app: **"Mechanic Shop OS"**
-3. Choose the appropriate plan (free tier should work for development)
-
-## Step 3: Get Your Credentials
-
-Once your app is created, you'll need two pieces of information:
-
-1. **App ID** - This will be visible in your dashboard
-2. **Admin Token** - Look for "Admin Token" or "Server Token" in your app settings
-
-## Step 4: Configure Environment Variables
-
-### Frontend (.env.local)
-Create a `.env.local` file in the project root with:
+### Frontend (`.env.local` in repo root)
 ```
 VITE_API_URL=http://localhost:3001
 VITE_INSTANT_DB_APP_ID=your_app_id_here
+VITE_USE_MOCK_DATA=false
 ```
+Setting `VITE_USE_MOCK_DATA=false` switches the client to use real API responses instead of the in-memory mocks.
 
-### Backend (server/.env)
-Create a `server/.env` file with:
+### Backend (`server/.env`)
 ```
 PORT=3001
 NODE_ENV=development
@@ -41,23 +29,40 @@ INSTANT_DB_ADMIN_TOKEN=your_admin_token_here
 ALLOWED_ORIGINS=http://localhost:5174,http://localhost:5173
 ```
 
-## Step 5: Test the Connection
+> Tip: copy these templates from `env.example` to avoid typos.
 
-After setting up the environment variables:
+## 3. Install & Start the Stack
 
-1. Restart the backend server: `cd server && npm run dev`
-2. Test the database connection: `http://localhost:3001/api/test-db`
+```bash
+npm run setup           # installs frontend + backend dependencies
+npm run dev:backend     # starts Express API at http://localhost:3001
+npm run dev             # (in a second terminal) starts the Vite frontend
+```
 
-You should see a success message indicating InstantDB is connected.
+## 4. Seed Canonical Data into InstantDB
 
-## Troubleshooting
+Once your `.env` files are in place you can load the sample dataset that mirrors the mock UI payloads:
 
-- Make sure both environment files are created and have the correct values
-- Restart both frontend and backend servers after adding environment variables
-- Check the console for any error messages
-- Verify your InstantDB credentials are correct in the dashboard
+```bash
+cd server
+npm run seed
+```
+
+This command writes customers, vehicles, jobs, appointments, calls, and shop settings to InstantDB using stable IDs so the app has realistic data out of the box. Re-running the command safely upserts the same records.
+
+## 5. Smoke-Test the Connection
+
+1. With the backend running, visit `http://localhost:3001/api/test-db`
+2. You should see a JSON success payload confirming InstantDB connectivity
+3. Load the frontend (`npm run dev`) and confirm lists such as Jobs, Customers, and Calls resolve real records (no mock badges)
+
+## Troubleshooting Checklist
+
+- `.env.local` and `server/.env` must contain the correct App ID and Admin Token
+- Restart both backend and frontend processes after changing environment variables
+- The seed script requires valid InstantDB credentials; failures will surface in the terminal
+- If the frontend still shows mock data, double-check that `VITE_USE_MOCK_DATA` is set to `false` (or remove the variable)
 
 ---
 
-**Next Steps**: Once InstantDB is configured, we'll move to Task 1.6 to complete the project setup infrastructure.
-
+With the backend seeded and environment configured you are ready to execute the launch readiness smoke tests.

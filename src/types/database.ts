@@ -1,4 +1,4 @@
-// Frontend TypeScript types for Mechanic Shop OS
+﻿// Frontend TypeScript types for Mechanic Shop OS
 // Based on PRD requirements and InstantDB schema
 
 export interface Customer {
@@ -80,8 +80,14 @@ export interface Appointment {
 
 export interface Call {
   id: string;
+  callId?: string;
   customerId?: string;
+  customerName?: string;
   jobId?: string;
+  vehicleId?: string;
+  vehicleYear?: number;
+  vehicleMake?: string;
+  vehicleModel?: string;
   phoneNumber: string;
   callStartTime: string;
   callDuration?: number;
@@ -95,7 +101,11 @@ export interface Call {
   callOutcome: CallOutcome;
   nextAction?: string;
   callTakenBy?: string;
-  callSource?: 'phone' | 'walk-in' | 'referral' | 'online' | 'repeat';
+  callSource?: CallSource;
+  serviceType?: string;
+  servicePriority?: CallServicePriority;
+  estimatedCost?: number;
+  status?: CallStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +116,7 @@ export type JobStatus =
   | 'incoming-call' 
   | 'scheduled' 
   | 'in-progress'
+  | 'in-bay'
   | 'waiting-parts' 
   | 'completed';
 
@@ -120,6 +131,9 @@ export type CallOutcome =
   | 'no-action'
   | 'transferred'
   | 'incomplete';
+export type CallSource = 'phone' | 'walk-in' | 'referral' | 'online' | 'repeat';
+export type CallServicePriority = 'low' | 'normal' | 'high' | 'urgent';
+export type CallStatus = 'open' | 'in-progress' | 'completed';
 
 export type PreferredContact = 'phone' | 'email';
 

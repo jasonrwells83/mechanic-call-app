@@ -4,7 +4,7 @@ import { CreateJobRequest, UpdateJobRequest, JobQueryFilters, JobStatus, JobPrio
 
 const router = Router();
 
-const JOB_STATUSES: JobStatus[] = ['incoming-call', 'scheduled', 'in-bay', 'waiting-parts', 'completed'];
+const JOB_STATUSES: JobStatus[] = ['intake', 'incoming-call', 'scheduled', 'in-progress', 'in-bay', 'waiting-parts', 'completed'];
 const JOB_PRIORITIES: JobPriority[] = ['low', 'medium', 'high'];
 
 const parseCsvParam = <T extends string>(value: unknown, allowed: readonly T[]): T[] | undefined => {

@@ -1,4 +1,4 @@
-import express, { type ErrorRequestHandler } from 'express';
+﻿import express, { type ErrorRequestHandler, type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/index';
@@ -21,7 +21,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'OK', 
     message: 'Mechanic Shop OS API is running',
@@ -33,7 +33,7 @@ app.get('/health', (req, res) => {
 app.use('/api', apiRoutes);
 
 // API root endpoint
-app.get('/api', (req, res) => {
+app.get('/api', (req: Request, res: Response) => {
   res.json({ 
     message: 'Mechanic Shop OS API v1.0',
     endpoints: {
@@ -49,7 +49,7 @@ app.get('/api', (req, res) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use('*', (req: Request, res: Response) => {
   res.status(404).json({ 
     error: 'Endpoint not found',
     path: req.originalUrl 
@@ -74,9 +74,9 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Mechanic Shop OS API server running on port ${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔧 API docs: http://localhost:${PORT}/api`);
+  console.log(`ðŸš€ Mechanic Shop OS API server running on port ${PORT}`);
+  console.log(`ðŸ“‹ Health check: http://localhost:${PORT}/health`);
+  console.log(`ðŸ”§ API docs: http://localhost:${PORT}/api`);
 });
 
 export default app;

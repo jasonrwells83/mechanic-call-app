@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "es2020",
     "module": "commonjs",
@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
-    "types": ["node"]
+    "types": ["node", "express"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -1,8 +1,15 @@
-import { Router, Request, Response } from 'express';
+﻿import { Router, Request, Response } from 'express';
 import { databaseService } from '../services/database';
-import { CreateCallRequest, UpdateCallRequest, CallQueryFilters, CallOutcome } from '../types/database';
+import { CallOutcome, CallQueryFilters, CreateCallRequest, UpdateCallRequest } from '../types/database';
 
-const ALL_OUTCOMES: CallOutcome[] = ['quote-given', 'scheduled', 'follow-up', 'no-action'];
+const ALL_OUTCOMES: CallOutcome[] = [
+  'scheduled',
+  'quote-requested',
+  'follow-up',
+  'no-action',
+  'transferred',
+  'incomplete',
+];
 
 const router = Router();
 
@@ -10,22 +17,24 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const queryOutcome = typeof req.query.outcome === 'string'
-      ? req.query.outcome.split(',').map((value) => value.trim()).filter((value): value is CallOutcome => (ALL_OUTCOMES as string[]).includes(value))
+      ? req.query.outcome
+          .split(',')
+          .map((value: string) => value.trim())
+          .filter((value: string): value is CallOutcome => (ALL_OUTCOMES as string[]).includes(value))
       : undefined;
 
     const filters: CallQueryFilters = {
       outcome: queryOutcome,
       customerId: typeof req.query.customerId === 'string' ? req.query.customerId : undefined,
-      dateRange: typeof req.query.startDate === 'string' && typeof req.query.endDate === 'string' ? {
-        start: req.query.startDate,
-        end: req.query.endDate,
-      } : undefined,
+      dateRange: typeof req.query.startDate === 'string' && typeof req.query.endDate === 'string'
+        ? { start: req.query.startDate, end: req.query.endDate }
+        : undefined,
       limit: typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined,
       offset: typeof req.query.offset === 'string' ? Number.parseInt(req.query.offset, 10) : undefined,
     };
 
     const calls = await databaseService.getAllCalls(filters);
-    
+
     res.json({
       success: true,
       data: calls,
@@ -45,7 +54,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const call = await databaseService.getCall(id);
-    
+
     if (!call) {
       return res.status(404).json({
         success: false,
@@ -70,17 +79,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const data: CreateCallRequest = req.body;
-    
-    // Validate required fields
-    if (!data.phone || !data.notes || !data.outcome) {
+
+    if (!data.phoneNumber || !data.callOutcome) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: phone, notes, outcome',
+        error: 'Missing required fields: phoneNumber, callOutcome',
       });
     }
 
     const call = await databaseService.createCall(data);
-    
+
     res.status(201).json({
       success: true,
       data: call,
@@ -100,9 +108,9 @@ router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const data: UpdateCallRequest = req.body;
-    
+
     const call = await databaseService.updateCall(id, data);
-    
+
     if (!call) {
       return res.status(404).json({
         success: false,
@@ -129,7 +137,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const success = await databaseService.deleteCall(id);
-    
+
     if (!success) {
       return res.status(404).json({
         success: false,
@@ -151,13 +159,3 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 export default router;
-
-
-
-
-
-
-
-
-
-

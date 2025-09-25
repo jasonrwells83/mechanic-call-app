@@ -1,5 +1,7 @@
+import dotenv from 'dotenv';
 import { init } from '@instantdb/admin';
 import { instantDBSchema } from '../types/database';
+dotenv.config();
 
 // Environment variables validation
 const APP_ID = process.env.INSTANT_DB_APP_ID;
@@ -17,14 +19,14 @@ if (!ADMIN_TOKEN) {
 export const db = init({
   appId: APP_ID,
   adminToken: ADMIN_TOKEN,
-  schema: instantDBSchema,
+  schema: instantDBSchema as any,
 });
 
 // Export configuration for use in other parts of the app
 export const instantDBConfig = {
   appId: APP_ID,
   isConfigured: !!(APP_ID && ADMIN_TOKEN),
-  schema: instantDBSchema,
+  schema: instantDBSchema as any,
 };
 
 // Database relationships and constraints
@@ -84,3 +86,4 @@ export const getCurrentTimestamp = (): string => {
 
 console.log('📊 InstantDB initialized with app ID:', APP_ID.substring(0, 8) + '...');
 console.log('🔗 Database relationships configured:', Object.keys(relationships).length);
+

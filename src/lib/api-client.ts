@@ -1,4 +1,4 @@
-// API Client
+﻿// API Client
 // Centralized HTTP client with proper error handling, typing, and request/response interceptors
 
 import type {
@@ -15,7 +15,7 @@ import type {
 
 // Base configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true' || true; // Default to true for frontend-only development
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'; // Enable mock fixtures only when explicitly opted in
 
 // Mock data for frontend development
 const mockData = {
